@@ -163,8 +163,8 @@
   type = integer
   intent = in
 [ntsulf]
-  standard_name = index_for_sulf
-  long_name = tracer index for sulf
+  standard_name = index_for_sulfate
+  long_name = index for sulfate
   units = index
   dimensions = ()
   type = integer
@@ -191,29 +191,29 @@
   type = integer
   intent = in
 [ntbc1]
-  standard_name = index_for_bc1
-  long_name = tracer index for bc1
+  standard_name = index_for_bcphobic
+  long_name = index for bcphobic
   units = index
   dimensions = ()
   type = integer
   intent = in
 [ntbc2]
-  standard_name = index_for_bc2
-  long_name = tracer index for bc2
+  standard_name = index_for_bcphilic
+  long_name = index for bcphilic
   units = index
   dimensions = ()
   type = integer
   intent = in
 [ntoc1]
-  standard_name = index_for_oc1
-  long_name = tracer index for oc1
+  standard_name = index_for_ocphobic
+  long_name = index for ocphobic
   units = index
   dimensions = ()
   type = integer
   intent = in
 [ntoc2]
-  standard_name = index_for_oc2
-  long_name = tracer index for oc2
+  standard_name = index_for_ocphilic
+  long_name = index for ocphilic
   units = index
   dimensions = ()
   type = integer

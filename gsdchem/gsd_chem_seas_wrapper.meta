@@ -187,36 +187,36 @@
   type = integer
   intent = in
 [ntss1]
-  standard_name = index_for_sea_salt_1
-  long_name = tracer index for sea salt 1
+  standard_name = index_for_seasalt_bin1
+  long_name = index for seasalt bin1
   units = index
   dimensions = ()
   type = integer
   intent = in
 [ntss2]
-  standard_name = index_for_sea_salt_2
-  long_name = tracer index for sea salt 2
+  standard_name = index_for_seasalt_bin2
+  long_name = index for seasalt bin2
   units = index
   dimensions = ()
   type = integer
   intent = in
 [ntss3]
-  standard_name = index_for_sea_salt_3
-  long_name = tracer index for sea salt 3
+  standard_name = index_for_seasalt_bin3
+  long_name = index for seasalt bin3
   units = index
   dimensions = ()
   type = integer
   intent = in
 [ntss4]
-  standard_name = index_for_sea_salt_4
-  long_name = tracer index for sea salt 4
+  standard_name = index_for_seasalt_bin4
+  long_name = index for seasalt bin4
   units = index
   dimensions = ()
   type = integer
   intent = in
 [ntss5]
-  standard_name = index_for_sea_salt_5
-  long_name = tracer index for sea salt 5
+  standard_name = index_for_seasalt_bin5
+  long_name = index for seasalt bin5
   units = index
   dimensions = ()
   type = integer

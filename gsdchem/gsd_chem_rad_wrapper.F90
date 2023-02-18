@@ -47,7 +47,7 @@ contains
                    ntss1,ntss2,ntss3,ntss4,ntss5,                       &
                    ntdust1,ntdust2,ntdust3,ntdust4,ntdust5,ntpp10,      &
                    gq0,abem,                                            &
-                   cplchm_rad_opt,lmk,faersw_cpl,                       &
+                   cplchm_rad_opt,lmk,                                  &
                    chem_opt_in,aer_ra_feedback_in,aer_ra_frq_in,        &
                    errmsg,errflg)
 
@@ -70,7 +70,6 @@ contains
     real(kind_phys), dimension(im,kte,ntrac), intent(inout) :: gq0
     real(kind_phys), dimension(im,7        ), intent(inout) :: abem
     integer,         intent(in) :: lmk
-    real(kind_phys), dimension(im, lmk, 14, 3),intent(inout) :: faersw_cpl
     logical, intent(in) :: cplchm_rad_opt
     integer,        intent(in) :: chem_opt_in
     integer,        intent(in) :: aer_ra_feedback_in,aer_ra_frq_in
@@ -216,18 +215,6 @@ contains
 
     abem(:,7)=aod2d(:)
 
-!>---- feedback to radiation
-    if (cplchm_rad_opt) then
-     do nv = 1, nbands
-      do k = kts, kte
-       do i = its, ite
-        faersw_cpl(i,k,nv,1) =  ext_cof(i,k,nv)
-        faersw_cpl(i,k,nv,2) =  sscal  (i,k,nv)
-        faersw_cpl(i,k,nv,3) =  asymp  (i,k,nv)
-       end do
-      end do
-     end do
-    endif
 
 !
    end subroutine gsd_chem_rad_wrapper_run
