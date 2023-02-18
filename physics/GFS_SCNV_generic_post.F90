@@ -16,7 +16,7 @@
         index_of_process_scnv, ntqv, flag_for_scnv_generic_tend,                   &
         ntcw,ntiw,ntclamt,ntrw,ntsw,ntrnc,ntsnc,ntgl,ntgnc,ntsigma,                &
         imfshalcnv, imfshalcnv_sas, imfshalcnv_samf, ntrac,                        &
-        cscnv, satmedmf, trans_trac, ras, errmsg, errflg)
+        cscnv, satmedmf, trans_trac, ras, cplchp, dqdti, errmsg, errflg)
 
       use machine,               only: kind_phys
 
@@ -31,6 +31,7 @@
       real(kind=kind_phys), dimension(:,:,:),   intent(in) :: save_q, gq0
 
       ! dtend only allocated if ldiag3d == .true.
+      real(kind=kind_phys), dimension(:,:), intent(inout) :: dqdti
       real(kind=kind_phys), intent(inout) :: dtend(:,:,:)
       integer, intent(in) :: dtidx(:,:)
       integer, intent(in) :: index_of_temperature, index_of_x_wind, index_of_y_wind, index_of_process_scnv
@@ -38,7 +39,7 @@
 
       ! Post code for SAS/SAMF
       integer, intent(in) :: npdf3d, num_p3d, ncnvcld3d
-      logical, intent(in) :: shcnvcw
+      logical, intent(in) :: shcnvcw, cplchp
       real(kind=kind_phys), dimension(:), intent(in) :: rain1
       real(kind=kind_phys), dimension(:, :), intent(in) :: cnvw, cnvc
       real(kind=kind_phys), dimension(:), intent(inout) :: rainc, cnvprcp, cnvprcpb
@@ -124,6 +125,15 @@
              dtend(:,:,idtend) = dtend(:,:,idtend) + (gq0(:,:,ntqv) - save_q(:,:,ntqv)) * frain
           endif
         endif
+      endif
+
+      if (cplchp) then
+        do k=1,levs
+          do i=1,im
+            tem  = (gq0(i,k,ntqv)-save_q(i,k,ntqv)) * frain
+            dqdti(i,k) = dqdti(i,k) + tem
+          enddo
+        enddo
       endif
 
       end subroutine GFS_SCNV_generic_post_run

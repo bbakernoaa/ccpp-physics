@@ -13,7 +13,7 @@
       imp_physics_nssl, nssl_invertccn, nssl_ccn_on,                                                  &
       imp_physics_zhao_carr, imp_physics_zhao_carr_pdf, convert_dry_rho, dtf, save_qc, save_qi, con_pi, dtidx, dtend,&
       index_of_process_conv_trans, gq0, clw, prsl, save_tcp, con_rd, con_eps, nssl_cccn, nwfa, spechum, ldiag3d,     &
-      qdiag3d, save_lnc, save_inc, ntk, ntke, otsptflag, errmsg, errflg)
+      qdiag3d, save_lnc, save_inc, ntk, ntke, otsptflag, cplchp, dqdti, errmsg, errflg)
 
       use machine,               only: kind_phys
       use module_mp_thompson_make_number_concentrations, only: make_IceNumber, make_DropletNumber
@@ -29,6 +29,7 @@
 
       logical,                                  intent(in) :: ltaerosol, convert_dry_rho
       logical,                                  intent(in) :: nssl_ccn_on, nssl_invertccn
+      logical,                                  intent(in) :: cplchp
 
       real(kind=kind_phys), intent(in   )                   :: con_pi, dtf
       real(kind=kind_phys), intent(in   ), dimension(:,:)   :: save_qc
@@ -47,6 +48,9 @@
       real(kind=kind_phys),                   intent(in) :: con_rd, con_eps, nssl_cccn
       real(kind=kind_phys), dimension(:,:),   intent(in) :: nwfa, save_tcp
       real(kind=kind_phys), dimension(:,:),   intent(in) :: spechum
+
+      ! dqdti may not be allocated
+      real(kind=kind_phys), dimension(:,:),           intent(inout) :: dqdti
 
       character(len=*),     intent(  out)                   :: errmsg
       integer,              intent(  out)                   :: errflg
@@ -287,6 +291,15 @@
           enddo
         enddo
       endif   ! end if_ntcw
+
+! dqdt_v : instaneous moisture tendency (kg/kg/sec)
+      if (cplchp) then
+        do k=1,levs
+          do i=1,im
+            dqdti(i,k) = dqdti(i,k) * (1.0 / dtf)
+          enddo
+        enddo
+      endif
 
     end subroutine GFS_suite_interstitial_4_run
 

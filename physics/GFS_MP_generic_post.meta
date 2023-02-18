@@ -128,9 +128,9 @@
   dimensions = ()
   type = logical
   intent = in
-[progsigma]
-  standard_name = do_prognostic_updraft_area_fraction
-  long_name = flag for prognostic sigma in cumulus scheme
+[cplchp]
+  standard_name = flag_for_chemistry_package_coupling
+  long_name = flag controlling cplchp collection (default off)
   units = flag
   dimensions = ()
   type = logical
@@ -479,6 +479,15 @@
   type = real
   kind = kind_phys
   intent = inout
+[rain_cplchp]
+  standard_name = lwe_thickness_of_precipitation_amount_for_chemcoupling
+  long_name = total rain precipitation chem package
+  units = m
+  dimensions = (horizontal_loop_extent)
+  type = real
+  kind = kind_phys
+  intent = inout
+  active = ( flag_for_chemistry_coupling .or. flag_for_chemistry_package_coupling )
 [rainc_cpl]
   standard_name = cumulative_lwe_thickness_of_convective_precipitation_amount_for_coupling
   long_name = total convective precipitation
@@ -731,22 +740,6 @@
   dimensions = ()
   type = logical
   intent = in
-[dqdt_qmicro]
-  standard_name = instantaneous_tendency_of_specific_humidity_due_to_microphysics
-  long_name = moisture tendency due to microphysics
-  units = kg kg-1 s-1
-  dimensions = (horizontal_loop_extent,vertical_layer_dimension)
-  type = real
-  kind = kind_phys
-  intent = inout
-[prevsq]
-  standard_name = specific_humidity_on_previous_timestep
-  long_name = specific_humidity_on_previous_timestep
-  units = kg kg-1
-  dimensions = (horizontal_loop_extent,vertical_layer_dimension)
-  type = real
-  kind = kind_phys
-  intent = inout
 [lssav]
   standard_name = flag_for_diagnostics
   long_name = logical flag for storing diagnostics
