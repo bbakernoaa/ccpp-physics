@@ -179,20 +179,11 @@ contains
                 ! 
                 ! SGS clouds present, use cloud-fraction modified to include sgs clouds.
                 !
-                if ((imfdeepcnv==imfdeepcnv_gf .or. do_mynnedmf) .and. kdt>1) then
-                   ! MYNN sub-grid cloud fraction.
-                   if (do_mynnedmf) then
-                      ! If rain/snow present, use GFDL MP cloud-fraction...
-                      if (tracer(iCol,iLay,i_cldrain)>1.0e-7 .OR. tracer(iCol,iLay,i_cldsnow)>1.0e-7) then
-                         cld_frac(iCol,iLay) = tracer(iCol,iLay,i_cldtot)
-                      endif
-                   ! GF sub-grid cloud fraction.
-                   else
-                      ! If no convective cloud condensate present, use GFDL MP cloud-fraction....
-                      if (qci_conv(iCol,iLay) <= 0.) then
-                         cld_frac(iCol,iLay) = tracer(iCol,iLay,i_cldtot)
-                      endif
-                   endif
+                if (imfdeepcnv==imfdeepcnv_gf .and. kdt>1) then
+                  ! If no convective cloud condensate present, use GFDL MP cloud-fraction....
+                  if (qci_conv(iCol,iLay) <= 0.) then
+                    cld_frac(iCol,iLay) = tracer(iCol,iLay,i_cldtot)
+                  endif
                 !
                 ! No SGS clouds, use GFDL MP cloud-fraction...
                 !
