@@ -46,8 +46,7 @@ contains
                    ntbc1,ntbc2,ntoc1,ntoc2,                             &
                    ntss1,ntss2,ntss3,ntss4,ntss5,                       &
                    ntdust1,ntdust2,ntdust3,ntdust4,ntdust5,ntpp10,      &
-                   gq0,abem,                                            &
-                   cplchm_rad_opt,lmk,                                  &
+                   gq0,abem,lmk,                                        &
                    chem_opt_in,aer_ra_feedback_in,aer_ra_frq_in,        &
                    errmsg,errflg)
 
@@ -70,7 +69,6 @@ contains
     real(kind_phys), dimension(im,kte,ntrac), intent(inout) :: gq0
     real(kind_phys), dimension(im,7        ), intent(inout) :: abem
     integer,         intent(in) :: lmk
-    logical, intent(in) :: cplchm_rad_opt
     integer,        intent(in) :: chem_opt_in
     integer,        intent(in) :: aer_ra_feedback_in,aer_ra_frq_in
     character(len=*), intent(out) :: errmsg

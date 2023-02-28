@@ -89,9 +89,10 @@
       errmsg = ''
       errflg = 0
 !GJF: dvdftra is only used if nvdiff != ntrac or (nvdiff == ntrac .and. )
-      if (nvdiff == ntrac .and. (hybedmf .or. do_shoc .or. satmedmf)) then
+      if (nvdiff == ntrac .and. (hybedmf .or. do_shoc .or. satmedmf) .and. (.not. cplchp)) then
         dqdt = dvdftra
-      elseif (nvdiff /= ntrac .and. .not. shinhong .and. .not. do_ysu) then
+      elseif ((nvdiff /= ntrac .and. .not. shinhong .and. .not. do_ysu) &
+       .or.(nvdiff == ntrac .and. cplchp ))then
 !
         if (ntke>0) then
           do k=1,levs

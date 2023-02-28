@@ -171,7 +171,7 @@
   dimensions = (horizontal_loop_extent,vertical_layer_dimension)
   type = real
   kind = kind_phys
-  intent = inout
+  intent = in
 [us3d]
   standard_name = x_wind_of_new_state
   long_name = zonal wind updated by physics
@@ -179,7 +179,7 @@
   dimensions = (horizontal_loop_extent,vertical_layer_dimension)
   type = real
   kind = kind_phys
-  intent = inout
+  intent = in
 [vs3d]
   standard_name = y_wind_of_new_state
   long_name = meridional wind updated by physics
@@ -187,7 +187,7 @@
   dimensions = (horizontal_loop_extent,vertical_layer_dimension)
   type = real
   kind = kind_phys
-  intent = inout
+  intent = in
 [spechum]
   standard_name = specific_humidity_of_new_state
   long_name = water vapor specific humidity updated by physics
@@ -195,7 +195,7 @@
   dimensions = (horizontal_loop_extent,vertical_layer_dimension)
   type = real
   kind = kind_phys
-  intent = inout
+  intent = in
 [nsoil]
   standard_name = vertical_dimension_of_soil
   long_name = soil vertical layer dimension

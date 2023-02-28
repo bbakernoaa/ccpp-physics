@@ -130,10 +130,10 @@
          real(kind_phys), dimension(:),         intent(inout) :: totprcpb
          real(kind_phys), dimension(:),         intent(inout) :: cnvprcpb
          logical,                               intent(in)    :: cplflx
-         ! rain_cpl, snow_cpl only allocated if cplflx == .true. or cplchm == .true.
+         ! rain_cpl, snow_cpl only allocated if cplflx == .true. or cplchm == .true. or cplchp == .true.
          real(kind_phys), dimension(:),         intent(inout) :: rain_cpl
          real(kind_phys), dimension(:),         intent(inout) :: snow_cpl
-         ! drain_cpl, dsnow_cpl only allocated if cplflx == .true. or cplchm == .true.
+         ! drain_cpl, dsnow_cpl only allocated if cplflx == .true. or cplchm == .true. or cplchp == .true.
          real(kind_phys), dimension(:),         intent(in)    :: drain_cpl
          real(kind_phys), dimension(:),         intent(in)    :: dsnow_cpl
          real(kind_phys), dimension(:),         intent(in)    :: vfact_ca

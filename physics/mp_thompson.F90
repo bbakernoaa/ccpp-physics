@@ -311,7 +311,7 @@ module mp_thompson
                               spp_wts_mp, spp_mp, n_var_spp,       &
                               spp_prt_list, spp_var_list,          &
                               spp_stddev_cutoff,                   &
-                              cplchm, pfi_lsan, pfl_lsan,          &
+                              cplchm, cplchp, pfi_lsan, pfl_lsan,  &
                               errmsg, errflg)
 
          implicit none
@@ -386,7 +386,7 @@ module mp_thompson
          character(len=3),          intent(in) :: spp_var_list(:)
          real(kind_phys),           intent(in) :: spp_stddev_cutoff(:)
 
-         logical, intent (in) :: cplchm
+         logical, intent (in) :: cplchm, cplchp
          ! ice and liquid water 3d precipitation fluxes - only allocated if cplchm is .true.
          real(kind=kind_phys), intent(inout), dimension(:,:) :: pfi_lsan
          real(kind=kind_phys), intent(inout), dimension(:,:) :: pfl_lsan
@@ -598,7 +598,7 @@ module mp_thompson
          kde = nlev
          kme = nlev
          kte = nlev
-         if(cplchm) then
+         if(cplchm .or. cplchp) then
            pfi_lsan = 0.0
            pfl_lsan = 0.0
          end if
@@ -773,7 +773,7 @@ module mp_thompson
          end if
 
          ! output instantaneous ice/snow and rain water 3d precipitation fluxes
-         if(cplchm) then
+         if(cplchm .or. cplchp) then
            pfi_lsan(:,:) = pfils(:,:,1)
            pfl_lsan(:,:) = pflls(:,:,1)
          end if
