@@ -129,11 +129,11 @@
          real(kind_phys), dimension(:),         intent(inout) :: cnvprcpb
          logical,                               intent(in)    :: cplflx
          logical,                               intent(in)    :: cpllnd
-         ! rain_cpl only allocated if cplflx == .true. or cplchm == .true. or cpllnd == .true.
+         ! rain_cpl only allocated if cplflx == .true. or cplchm == .true. or cpllnd == .true. or cplchp == .true.
          real(kind_phys), dimension(:),         intent(inout) :: rain_cpl
          ! snow_cpl only allocated if cplflx == .true. or cplchm == .true.
          real(kind_phys), dimension(:),         intent(inout) :: snow_cpl
-         ! drain_cpl, dsnow_cpl only allocated if cplflx == .true. or cplchm == .true.
+         ! drain_cpl, dsnow_cpl only allocated if cplflx == .true. or cplchm == .true. or cplchp == .true.
          real(kind_phys), dimension(:),         intent(in)    :: drain_cpl
          real(kind_phys), dimension(:),         intent(in)    :: dsnow_cpl
          real(kind_phys), dimension(:),         intent(in)    :: vfact_ca

@@ -15,7 +15,7 @@
         ntccn, nthl, nthnc, ntgv, nthv, ntrz, ntgz, nthz,                                &
         imp_physics, imp_physics_gfdl, imp_physics_thompson, imp_physics_wsm6,           &
         imp_physics_zhao_carr, imp_physics_mg, imp_physics_fer_hires, imp_physics_nssl,  &
-        ltaerosol, mraerosol, nssl_ccn_on, nssl_hail_on, nssl_3moment,                   &
+        ltaerosol, mraerosol, cplchp, nssl_ccn_on, nssl_hail_on, nssl_3moment,                   &
         hybedmf, do_shoc, satmedmf, qgrs, vdftra, save_u, save_v, save_t, save_q,        &
         flag_for_pbl_generic_tend, ldiag3d, qdiag3d, lssav, ugrs, vgrs, tgrs, errmsg, errflg)
         
@@ -36,7 +36,7 @@
       logical, intent(in) :: ltaerosol, hybedmf, do_shoc, satmedmf, flag_for_pbl_generic_tend, mraerosol
       integer, intent(in) :: imp_physics_nssl
       logical, intent(in) :: nssl_hail_on, nssl_ccn_on, nssl_3moment
-
+      logical, intent(in) :: cplchp
       real(kind=kind_phys), dimension(:,:,:), intent(in) :: qgrs
       real(kind=kind_phys), dimension(:,:), intent(in) :: ugrs, vgrs, tgrs
       real(kind=kind_phys), dimension(:,:, :), intent(inout) :: vdftra
@@ -58,7 +58,7 @@
 
       rtg_ozone_index=-1
 !DH: dvdftra is only used if nvdiff != ntrac or (nvdiff == ntrac .and. )
-      if (nvdiff == ntrac .and. (hybedmf .or. do_shoc .or. satmedmf)) then
+      if (nvdiff == ntrac .and. (hybedmf .or. do_shoc .or. satmedmf).and. (.not.cplchp)) then
         vdftra = qgrs
         rtg_ozone_index = ntoz
       else
