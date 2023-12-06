@@ -400,6 +400,7 @@
 !    asyrhi_grt(KCM1,NSWLWBD) - asymmetry parameter for sw+lw band
       real (kind=kind_phys),allocatable,save,dimension(:,:) ::          &
      &   extrhi_grt, extrhi_grt_550, scarhi_grt, ssarhi_grt, asyrhi_grt
+     &   extrhi_grt, extrhi_grt_550, scarhi_grt, ssarhi_grt, asyrhi_grt
 !
 !> \name relative humidity dependent aerosol optical properties:
 !! species : ss001, ss002, ss003, ss004, ss005, so4,

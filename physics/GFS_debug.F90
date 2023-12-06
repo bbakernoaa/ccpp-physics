@@ -604,7 +604,7 @@
                        call print_var(mpirank, omprank, blkno, Grid%xlat_d, Grid%xlon_d, 'Tbd%dtotprcp'      , Tbd%dtotprcp)
                        call print_var(mpirank, omprank, blkno, Grid%xlat_d, Grid%xlon_d, 'Tbd%dcnvprcp'      , Tbd%dcnvprcp)
                      end if
-                     if (Model%cplflx .or. Model%cplchm) then
+                     if (Model%cplflx .or. Model%cplchm .or. Model%cplchp) then
                        call print_var(mpirank, omprank, blkno, Grid%xlat_d, Grid%xlon_d, 'Tbd%drain_cpl'     , Tbd%drain_cpl)
                        call print_var(mpirank, omprank, blkno, Grid%xlat_d, Grid%xlon_d, 'Tbd%dsnow_cpl'     , Tbd%dsnow_cpl)
                      end if
@@ -818,7 +818,7 @@
                      call print_var(mpirank, omprank, blkno, Grid%xlat_d, Grid%xlon_d, 'Coupling%sfcdsw ', Coupling%sfcdsw )
                      call print_var(mpirank, omprank, blkno, Grid%xlat_d, Grid%xlon_d, 'Coupling%sfcnsw ', Coupling%sfcnsw )
                      call print_var(mpirank, omprank, blkno, Grid%xlat_d, Grid%xlon_d, 'Coupling%sfcdlw ', Coupling%sfcdlw )
-                     if (Model%cplflx .or. Model%do_sppt .or. Model%cplchm) then
+                     if (Model%cplflx .or. Model%do_sppt .or. Model%cplchm .or. Model%cplchp) then
                         call print_var(mpirank, omprank, blkno, Grid%xlat_d, Grid%xlon_d, 'Coupling%rain_cpl', Coupling%rain_cpl)
                         call print_var(mpirank, omprank, blkno, Grid%xlat_d, Grid%xlon_d, 'Coupling%snow_cpl', Coupling%snow_cpl)
                      end if
@@ -885,7 +885,7 @@
                            call print_var(mpirank, omprank, blkno, Grid%xlat_d, Grid%xlon_d, 'Coupling%ulwsfcino_cpl', Coupling%ulwsfcino_cpl )
                         end if
                      end if
-                     if (Model%cplchm) then
+                     if (Model%cplchm .or. Model%cplchp) then
                         call print_var(mpirank, omprank, blkno, Grid%xlat_d, Grid%xlon_d, 'Coupling%rainc_cpl', Coupling%rainc_cpl)
                         call print_var(mpirank, omprank, blkno, Grid%xlat_d, Grid%xlon_d, 'Coupling%ushfsfci ', Coupling%ushfsfci )
                         call print_var(mpirank, omprank, blkno, Grid%xlat_d, Grid%xlon_d, 'Coupling%pfi_lsan', Coupling%pfi_lsan )
