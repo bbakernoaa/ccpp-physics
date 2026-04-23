@@ -96,7 +96,7 @@
      &     dot,ncloud,ud_mf,dd_mf,dt_mf,cnvw,cnvc,                      &
      &     qlcn,qicn,w_upi,cf_upi,cnv_mfd,                              &
      &     cnv_dqldt,clcn,cnv_fice,cnv_ndrop,cnv_nice,mp_phys,          &
-     &     mp_phys_mg,clam,c0,c1,betal,betas,evfact,evfactl,pgcon,      &
+     &     mp_phys_mg,clam,c0,c1,betal,betas,evfact,evfactl,pgcon, transport_opt_in, use_mass_fixer_in,      &
      &     errmsg,errflg)
 !
       use machine , only : kind_phys
@@ -139,6 +139,8 @@
      &                                    cnv_nice(:,:),  cf_upi(:,:)
       character(len=*),     intent(out) :: errmsg
       integer,              intent(out) :: errflg
+      integer, intent(in), optional :: transport_opt_in
+      logical, intent(in), optional :: use_mass_fixer_in
 !
 ! Local variables
 !
@@ -213,8 +215,10 @@
       real(kind=kind_phys) mass_init_q1(im), mass_init_qlc(im),         &
      &                     mass_init_qli(im), zero_sink(im),            &
      &                     mnet_work(im,km)
-      integer            :: transport_opt = 2
+      integer            :: transport_opt = 1
       logical            :: use_mass_fixer = .true.
+      if (present(transport_opt_in)) transport_opt = transport_opt_in
+      if (present(use_mass_fixer_in)) use_mass_fixer = use_mass_fixer_in
 !  cloud water
 !     real(kind=kind_phys) tvo(im,km)
       real(kind=kind_phys) qlko_ktcon(im), dellal(im,km), tvo(im,km),
