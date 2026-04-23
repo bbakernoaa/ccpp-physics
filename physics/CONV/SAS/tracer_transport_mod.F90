@@ -48,8 +48,8 @@ contains
     real(kind=kind_phys), intent(inout) :: q_tracer(:,:)
 
     integer :: i, k
-    real(kind=kind_phys) :: layer_mass, layer_mass_above
-    real(kind=kind_phys) :: q_upwind, max_flux_up, max_flux_dn, q_tendency
+    real(kind=kind_phys) :: layer_mass_rate, layer_mass_above_rate
+    real(kind=kind_phys) :: q_upwind, max_flux_up, max_flux_dn
     real(kind=kind_phys), dimension(im, 0:km) :: q_flux
 
     do i = 1, im
@@ -60,13 +60,15 @@ contains
     do k = 1, km - 1
       do i = 1, im
         if (cnvflg(i)) then
-          layer_mass       = delp(i,k)   / (grav * delt)
-          layer_mass_above = delp(i,k+1) / (grav * delt)
+          ! layer_mass_rate: mass of layer k per unit time [kg/m2/s]
+          layer_mass_rate       = delp(i,k)   / (grav * delt)
+          layer_mass_above_rate = delp(i,k+1) / (grav * delt)
 
           q_upwind = merge(q_tracer(i,k), q_tracer(i,k+1), mnet(i,k) > 0.0_kind_phys)
-          max_flux_up = q_tracer(i,k) * layer_mass
-          max_flux_dn = -q_tracer(i,k+1) * layer_mass_above
+          max_flux_up = q_tracer(i,k) * layer_mass_rate
+          max_flux_dn = -q_tracer(i,k+1) * layer_mass_above_rate
 
+          ! Limit flux to prevent negative values [kg/m2/s]
           q_flux(i,k) = merge( min(mnet(i,k) * q_upwind, max_flux_up), &
                                max(mnet(i,k) * q_upwind, max_flux_dn), &
                                mnet(i,k) > 0.0_kind_phys )
@@ -79,15 +81,15 @@ contains
     do k = 1, km
       do i = 1, im
         if (cnvflg(i)) then
-          q_tendency = (q_flux(i,k-1) - q_flux(i,k)) / (delp(i,k) / (grav * delt))
-          q_tracer(i,k) = q_tracer(i,k) + (q_tendency * delt)
+          ! Update tracer using flux divergence
+          q_tracer(i,k) = q_tracer(i,k) + (q_flux(i,k-1) - q_flux(i,k)) * delt * grav / delp(i,k)
         endif
       enddo
     enddo
   end subroutine transport_tracer_flux_form
 
   ! =======================================================================
-  ! ROUTINE 3: Fast Advection + Two-Pass Hole-Filling
+  ! ROUTINE 3: Conservative Advection + Two-Pass Hole-Filling
   ! =======================================================================
   subroutine transport_tracer_hole_filling(im, km, delt, cnvflg, delp, mnet, q_tracer)
     integer, intent(in) :: im, km
@@ -97,18 +99,31 @@ contains
     real(kind=kind_phys), intent(inout) :: q_tracer(:,:)
 
     integer :: i, k
-    real(kind=kind_phys) :: q_tendency, mass_deficit
+    real(kind=kind_phys) :: mass_deficit, q_upwind
+    real(kind=kind_phys), dimension(im, 0:km) :: q_flux
 
-    ! Step 1: Traditional Advective Update
+    ! Step 1: Strict Flux-Form Transport (No limiters here to allow advection to create holes)
+    do i = 1, im
+      q_flux(i, 0)  = 0.0_kind_phys
+      q_flux(i, km) = 0.0_kind_phys
+    enddo
+
     do k = 1, km - 1
       do i = 1, im
         if (cnvflg(i)) then
-          if (mnet(i,k) <= 0.0_kind_phys) then
-             q_tendency = mnet(i,k) * (q_tracer(i,k+1) - q_tracer(i,k)) / delp(i,k)
-          else
-             q_tendency = mnet(i,k) * (q_tracer(i,k) - q_tracer(i,k-1)) / delp(i,k)
-          endif
-          q_tracer(i,k) = q_tracer(i,k) + (q_tendency * grav * delt)
+          q_upwind = merge(q_tracer(i,k), q_tracer(i,k+1), mnet(i,k) > 0.0_kind_phys)
+          ! q_flux in [kg/m2/s]
+          q_flux(i,k) = mnet(i,k) * q_upwind
+        else
+          q_flux(i,k) = 0.0_kind_phys
+        endif
+      enddo
+    enddo
+
+    do k = 1, km
+      do i = 1, im
+        if (cnvflg(i)) then
+          q_tracer(i,k) = q_tracer(i,k) + (q_flux(i,k-1) - q_flux(i,k)) * delt * grav / delp(i,k)
         endif
       enddo
     enddo
@@ -157,13 +172,23 @@ contains
     real(kind=kind_phys) :: q_tendency
     real(kind=kind_phys), parameter :: qmin = 1.0e-10_kind_phys
 
-    do k = 1, km - 1
+    do k = 1, km
       do i = 1, im
         if (cnvflg(i)) then
-          if (mnet(i,k) <= 0.0_kind_phys) then
-             q_tendency = mnet(i,k) * (q_tracer(i,k+1) - q_tracer(i,k)) / delp(i,k)
+          if (k == 1) then
+             q_tendency = merge(mnet(i,k) * (q_tracer(i,k+1) - q_tracer(i,k)) / delp(i,k), &
+                                mnet(i,k) * q_tracer(i,k) / delp(i,k), &
+                                mnet(i,k) <= 0.0_kind_phys)
+          else if (k == km) then
+             q_tendency = merge(-mnet(i,k-1) * q_tracer(i,k) / delp(i,k), &
+                                mnet(i,k-1) * (q_tracer(i,k) - q_tracer(i,k-1)) / delp(i,k), &
+                                mnet(i,k-1) <= 0.0_kind_phys)
           else
-             q_tendency = mnet(i,k) * (q_tracer(i,k) - q_tracer(i,k-1)) / delp(i,k)
+             if (mnet(i,k) <= 0.0_kind_phys) then
+                q_tendency = mnet(i,k) * (q_tracer(i,k+1) - q_tracer(i,k)) / delp(i,k)
+             else
+                q_tendency = mnet(i,k-1) * (q_tracer(i,k) - q_tracer(i,k-1)) / delp(i,k)
+             endif
           endif
           q_tracer(i,k) = q_tracer(i,k) + (q_tendency * grav * delt)
           q_tracer(i,k) = max(q_tracer(i,k), qmin)
