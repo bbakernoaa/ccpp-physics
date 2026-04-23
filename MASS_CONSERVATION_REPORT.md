@@ -6,14 +6,17 @@ This report summarizes the verification of the structural upgrade to the UFS CCP
 ## Standalone Transport Module Verification
 The `tracer_transport_mod` was tested using a 1D column with 10 layers. A consistent initial tracer distribution containing a negative value (a "hole") was used to compare how each method handles non-physical values and maintains total mass.
 
-| Transport Option | Initial Mass | Final Mass | Mass Change (Delta) | Status |
-| :--- | ---: | ---: | ---: | :--- |
-| **Flux-Form** | 9.0754742955 | 9.0754742955 | 0.00000E+00 | **Conservative** |
-| **Hole-Filling (Hybrid)** | 9.0754742955 | 9.0754742955 | 0.00000E+00 | **Conservative** |
-| **Original Advective** | 9.0754742955 | 9.1774460188 | +1.01972E-01 | **Leaky** (Clipped) |
-| **Mass-Fixer** | 9.0754742955 | 9.0754742955 | +3.55271E-15 | **Conservative** |
+### Scenario: Fillable Hole
+Initial state: $q = 10^{-3}$ everywhere except $q_5 = -10^{-4}$. Total column mass is positive.
 
-*Note: The "Advective" method generates mass because it clips the negative hole to a minimum value. The "Hole-Filling" method and "Flux-Form" method preserve the initial mass by correctly redistributing or limiting fluxes.*
+| Method | Initial Mass | Final Mass | Mass Change (Delta) | Min(q) | Status |
+| :--- | ---: | ---: | ---: | ---: | :--- |
+| **Flux-Form** | 9.0754742955 | 9.0754742955 | 0.00000E+00 | +1.000E-04 | **Conservative** |
+| **Hole-Filling Only** | 9.0754742955 | 9.0754742955 | 0.00000E+00 | 0.000E+00 | **Conservative** |
+| **Hole-Fill + Fixer** | 9.0754742955 | 9.0754742955 | 0.00000E+00 | 0.000E+00 | **Conservative** |
+| **Original Advective** | 9.0754742955 | 9.1774460188 | +1.01972E-01 | +1.000E-10 | **Leaky** (Clipped) |
+
+*Note: In this scenario, the Hole-Filling routine alone is perfectly conservative because there is enough mass in the column to fill the deficit locally. The Advective method generates mass by clipping the negative value to a minimum floor.*
 
 ## Integrated SAS Scheme Verification
 The refactored deep and shallow convection schemes were verified in a unit test environment to ensure correct integration of the new transport module.
