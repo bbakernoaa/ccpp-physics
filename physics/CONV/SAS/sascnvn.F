@@ -2169,6 +2169,14 @@
       endif
 
 !!
+      if (use_mass_fixer) then
+        call apply_mass_fixer(im, km, cnvflg, delp, rn,                 &
+     &                        mass_init_q1, q1)
+        call apply_mass_fixer(im, km, cnvflg, delp, zero_sink,          &
+     &                        mass_init_qlc, qlc)
+        call apply_mass_fixer(im, km, cnvflg, delp, zero_sink,          &
+     &                        mass_init_qli, qli)
+      endif
       return
 !> @}
 !! @}
