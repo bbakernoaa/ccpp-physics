@@ -62,6 +62,8 @@ else(SCHEMES)
   include(${CMAKE_CURRENT_BINARY_DIR}/CCPP_SCHEMES.cmake)
   message(STATUS "Got CCPP SCHEMES from cmakefile include file")
 endif(SCHEMES)
+# Add tracer transport module for SAS schemes
+list(APPEND SCHEMES ${LOCAL_CURRENT_SOURCE_DIR}/physics/CONV/SAS/tracer_transport_mod.F90)
 list(REMOVE_DUPLICATES SCHEMES)
 
 # Set the sources: physics scheme caps
