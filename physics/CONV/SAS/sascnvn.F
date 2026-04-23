@@ -101,6 +101,9 @@
 !
       use machine , only : kind_phys
       use funcphys , only : fpvs
+      use tracer_transport_mod, only : calc_column_mass,                &
+     &    transport_tracer_flux_form, transport_tracer_hole_filling,    &
+     &    transport_tracer_advective, apply_mass_fixer
 !      use physcons, grav => con_g, cp => con_cp, hvap => con_hvap       &
 !     &,             rv => con_rv, fv => con_fvirt, t0c => con_t0c       &
 !     &,             cvap => con_cvap, cliq => con_cliq                  &
@@ -177,6 +180,11 @@
      &                     kbm(im), kmax(im)
 !
       real(kind=kind_phys) ps(im),      del(im,km), prsl(im,km)
+      real(kind=kind_phys) mass_init_q1(im), mass_init_qlc(im),         &
+     &                     mass_init_qli(im), zero_sink(im),            &
+     &                     mnet(im,km)
+      integer :: transport_opt = 1
+      logical :: use_mass_fixer = .true.
 !
       real(kind=kind_phys) aa1(im),     acrt(im),   acrtfct(im),
      &                     delhbar(im), delq(im),   delq2(im),
@@ -257,6 +265,11 @@
       prsl = prslp * 0.001
       del  = delp  * 0.001
 !************************************************************************
+      call calc_column_mass(im, km, cnvflg, q1, delp, mass_init_q1)
+      call calc_column_mass(im, km, cnvflg, qlc, delp, mass_init_qlc)
+      call calc_column_mass(im, km, cnvflg, qli, delp, mass_init_qli)
+!************************************************************************
+!************************************************************************
 !
 !
       km1 = km - 1
@@ -266,6 +279,7 @@
 !
       do i=1,im
         cnvflg(i) = .true.
+        zero_sink(i) = 0.0
         rn(i)=0.
         kbot(i)=km+1
         ktop(i)=0
@@ -1867,13 +1881,45 @@
         delvbar(i) = 0.
         qcond(i) = 0.
       enddo
+      do i = 1, im
+        if (cnvflg(i)) then
+          do k = 1, km - 1
+            mnet(i,k) = eta(i,k) * xmb(i) -                             &
+     &                  edto(i) * etad(i,k) * xmb(i)
+          enddo
+          mnet(i,km) = 0.0
+        endif
+      enddo
+      select case(transport_opt)
+        case(1)
+          call transport_tracer_flux_form(im, km, dt2, cnvflg, delp,     &
+     &                                    mnet, q1)
+          call transport_tracer_flux_form(im, km, dt2, cnvflg, delp,     &
+     &                                    mnet, qlc)
+          call transport_tracer_flux_form(im, km, dt2, cnvflg, delp,     &
+     &                                    mnet, qli)
+        case(2)
+          call transport_tracer_hole_filling(im, km, dt2, cnvflg, delp,  &
+     &                                       mnet, q1)
+          call transport_tracer_hole_filling(im, km, dt2, cnvflg, delp,  &
+     &                                       mnet, qlc)
+          call transport_tracer_hole_filling(im, km, dt2, cnvflg, delp,  &
+     &                                       mnet, qli)
+        case(3)
+          call transport_tracer_advective(im, km, dt2, cnvflg, delp,     &
+     &                                    mnet, q1)
+          call transport_tracer_advective(im, km, dt2, cnvflg, delp,     &
+     &                                    mnet, qlc)
+          call transport_tracer_advective(im, km, dt2, cnvflg, delp,     &
+     &                                    mnet, qli)
+      end select
       do k = 1, km
         do i = 1, im
           if (cnvflg(i) .and. k .le. kmax(i)) then
             if(k.le.ktcon(i)) then
               dellat = (dellah(i,k) - hvap * dellaq(i,k)) / cp
               t1(i,k) = t1(i,k) + dellat * xmb(i) * dt2
-              q1(i,k) = q1(i,k) + dellaq(i,k) * xmb(i) * dt2
+!               q1(i,k) = q1(i,k) + dellaq(i,k) * xmb(i) * dt2
 !             tem = 1./rcs(i)
 !             u1(i,k) = u1(i,k) + dellau(i,k) * xmb(i) * dt2 * tem
 !             v1(i,k) = v1(i,k) + dellav(i,k) * xmb(i) * dt2 * tem
@@ -1960,7 +2006,7 @@
                 flg(i) = .false.
               endif
               if(rn(i).gt.0..and.qevap(i).gt.0.) then
-                q1(i,k) = q1(i,k) + qevap(i)
+!                 q1(i,k) = q1(i,k) + qevap(i)
                 t1(i,k) = t1(i,k) - elocp * qevap(i)
                 rn(i) = rn(i) - .001 * qevap(i) * dp / g
                 deltv(i) = - elocp*qevap(i)/dt2
@@ -2123,6 +2169,14 @@
       endif
 
 !!
+      if (use_mass_fixer) then
+        call apply_mass_fixer(im, km, cnvflg, delp, rn,                 &
+     &                        mass_init_q1, q1)
+        call apply_mass_fixer(im, km, cnvflg, delp, zero_sink,          &
+     &                        mass_init_qlc, qlc)
+        call apply_mass_fixer(im, km, cnvflg, delp, zero_sink,          &
+     &                        mass_init_qli, qli)
+      endif
       return
 !> @}
 !! @}
