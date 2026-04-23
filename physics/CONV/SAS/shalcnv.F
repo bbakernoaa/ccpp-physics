@@ -96,6 +96,9 @@
 !
       use machine  , only : kind_phys
       use funcphys , only : fpvs
+      use tracer_transport_mod, only: calc_column_mass,                 &
+     &    transport_tracer_flux_form, transport_tracer_advective,       &
+     &    transport_tracer_hole_filling, apply_mass_fixer
 !      use physcons, grav => con_g, cp => con_cp, hvap => con_hvap       &
 !     &,             rv => con_rv, fv => con_fvirt, t0c => con_t0c       &
 !     &,             rd => con_rd, cvap => con_cvap, cliq => con_cliq    &
@@ -181,6 +184,12 @@
 !  local variables and arrays
       real(kind=kind_phys) pfld(im,km),    to(im,km),     qo(im,km),
      &                     uo(im,km),      vo(im,km),     qeso(im,km)
+!
+      real(kind=kind_phys) mass_init_q1(im), mass_init_qlc(im),         &
+     &                     mass_init_qli(im), zero_sink(im),            &
+     &                     mnet_work(im,km)
+      integer            :: transport_opt = 2
+      logical            :: use_mass_fixer = .true.
 !  cloud water
 !     real(kind=kind_phys) qlko_ktcon(im), dellal(im,km), tvo(im,km),
       real(kind=kind_phys) qlko_ktcon(im), dellal(im,km),
@@ -245,6 +254,14 @@
           kbot(i)=km+1
           ktop(i)=0
         endif
+      enddo
+!
+      zero_sink(:) = 0.0
+      call calc_column_mass(im, km, cnvflg, q1, delp, mass_init_q1)
+      call calc_column_mass(im, km, cnvflg, qlc, delp, mass_init_qlc)
+      call calc_column_mass(im, km, cnvflg, qli, delp, mass_init_qli)
+!
+      do i=1,im
         rn(i)=0.
         kbcon(i)=km
         ktcon(i)=1
@@ -1330,6 +1347,46 @@
            dt_mf(i,k) = ud_mf(i,k)
         endif
       enddo
+!
+! --- New Conservative Tracer Transport ---
+      do k = 1, km
+        do i = 1, im
+          mnet_work(i,k) = ud_mf(i,k) / dt2
+        enddo
+      enddo
+!
+      select case(transport_opt)
+      case(1)
+        call transport_tracer_flux_form(im, km, dt2, cnvflg, delp,       &
+     &                                  mnet_work, q1)
+        call transport_tracer_flux_form(im, km, dt2, cnvflg, delp,       &
+     &                                  mnet_work, qlc)
+        call transport_tracer_flux_form(im, km, dt2, cnvflg, delp,       &
+     &                                  mnet_work, qli)
+      case(2)
+        call transport_tracer_hole_filling(im, km, dt2, cnvflg, delp,   &
+     &                                     mnet_work, q1)
+        call transport_tracer_hole_filling(im, km, dt2, cnvflg, delp,   &
+     &                                     mnet_work, qlc)
+        call transport_tracer_hole_filling(im, km, dt2, cnvflg, delp,   &
+     &                                     mnet_work, qli)
+      case(3)
+        call transport_tracer_advective(im, km, dt2, cnvflg, delp,      &
+     &                                  mnet_work, q1)
+        call transport_tracer_advective(im, km, dt2, cnvflg, delp,      &
+     &                                  mnet_work, qlc)
+        call transport_tracer_advective(im, km, dt2, cnvflg, delp,      &
+     &                                  mnet_work, qli)
+      end select
+!
+      if (use_mass_fixer) then
+        call apply_mass_fixer(im, km, cnvflg, delp, zero_sink,          &
+     &                        mass_init_q1, q1)
+        call apply_mass_fixer(im, km, cnvflg, delp, zero_sink,          &
+     &                        mass_init_qlc, qlc)
+        call apply_mass_fixer(im, km, cnvflg, delp, zero_sink,          &
+     &                        mass_init_qli, qli)
+      endif
 !!
       return
 
