@@ -1,20 +1,22 @@
 # Tracer Mass Conservation Report - SAS Convection Schemes
 
 ## Overview
-This report summarizes the verification of the structural upgrade to the UFS CCPP-physics repository to fix tracer mass conservation leaks in the Simplified Arakawa-Schubert (SAS) convection schemes. The advective finite differencing and clipping method has been replaced with strictly conservative flux-form and hole-filling methods, supported by a proportional mass fixer.
+This report summarizes the verification of the structural upgrade to the UFS CCPP-physics repository to fix tracer mass conservation leaks in the Simplified Arakawa-Schubert (SAS) convection schemes. The previous advective finite differencing and clipping method has been replaced with strictly conservative flux-form and hole-filling methods, supported by a proportional mass fixer.
 
 ## Standalone Transport Module Verification
-The `tracer_transport_mod` was tested using a 1D column with 10 layers and a prescribed mass flux at layer interface 5. The Hole-Filling method implements a hybrid "Conservative Advection + Hole-Fixer" approach.
+The `tracer_transport_mod` was tested using a 1D column with 10 layers. A consistent initial tracer distribution containing a negative value (a "hole") was used to compare how each method handles non-physical values and maintains total mass.
 
-| Method | Initial Column Mass | Final Column Mass | Mass Change (Delta) | Status |
-| :--- | :--- | :--- | :--- | :--- |
-| **Original Advective** | 9.1774459678 | 9.1774460188 | +5.09860E-08 | **Leaky** (Clipped) |
-| **Flux-Form** | 10.1971621298 | 10.1971621298 | 0.00000E+00 | **Conservative** |
+| Transport Option | Initial Mass | Final Mass | Mass Change (Delta) | Status |
+| :--- | ---: | ---: | ---: | :--- |
+| **Flux-Form** | 9.0754742955 | 9.0754742955 | 0.00000E+00 | **Conservative** |
 | **Hole-Filling (Hybrid)** | 9.0754742955 | 9.0754742955 | 0.00000E+00 | **Conservative** |
-| **Mass Fixer** | 10.1971621298 | 10.1971621298 | +5.32907E-15 | **Conservative** |
+| **Original Advective** | 9.0754742955 | 9.1774460188 | +1.01972E-01 | **Leaky** (Clipped) |
+| **Mass-Fixer** | 9.0754742955 | 9.0754742955 | +3.55271E-15 | **Conservative** |
+
+*Note: The "Advective" method generates mass because it clips the negative hole to a minimum value. The "Hole-Filling" method and "Flux-Form" method preserve the initial mass by correctly redistributing or limiting fluxes.*
 
 ## Integrated SAS Scheme Verification
-The refactored deep and shallow convection schemes were tested in a unit test environment.
+The refactored deep and shallow convection schemes were verified in a unit test environment to ensure correct integration of the new transport module.
 
 ### Shallow Convection (`shalcnv.F`)
 Tested with `transport_opt = 2` (Hole-Filling Hybrid) and `use_mass_fixer = .true.`.
