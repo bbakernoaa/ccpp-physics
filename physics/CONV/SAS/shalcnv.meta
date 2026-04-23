@@ -1,7 +1,7 @@
 [ccpp-table-properties]
   name = shalcnv
   type = scheme
-  dependencies = ../../tools/funcphys.f90,../../hooks/machine.F
+  dependencies = ../../tools/funcphys.f90,../../hooks/machine.F,tracer_transport_mod.F90
 
 ########################################################################
 [ccpp-arg-table]
@@ -44,6 +44,22 @@
   kind = len=*
   intent = out
 [errflg]
+[transport_opt_in]
+  standard_name = transport_option_for_convection
+  long_name = flag for tracer transport: 1=Flux-Form, 2=Hole-Filling, 3=Advective
+  units = flag
+  dimensions = ()
+  type = integer
+  intent = in
+  optional = True
+[use_mass_fixer_in]
+  standard_name = flag_for_tracer_mass_fixer
+  long_name = flag to enable proportional tracer mass fixer
+  units = flag
+  dimensions = ()
+  type = logical
+  intent = in
+  optional = True
   standard_name = ccpp_error_code
   long_name = error code for error handling in CCPP
   units = 1
@@ -400,9 +416,41 @@
   kind = len=*
   intent = out
 [errflg]
+[transport_opt_in]
+  standard_name = transport_option_for_convection
+  long_name = flag for tracer transport: 1=Flux-Form, 2=Hole-Filling, 3=Advective
+  units = flag
+  dimensions = ()
+  type = integer
+  intent = in
+  optional = True
+[use_mass_fixer_in]
+  standard_name = flag_for_tracer_mass_fixer
+  long_name = flag to enable proportional tracer mass fixer
+  units = flag
+  dimensions = ()
+  type = logical
+  intent = in
+  optional = True
   standard_name = ccpp_error_code
   long_name = error code for error handling in CCPP
   units = 1
   dimensions = ()
   type = integer
   intent = out
+[transport_opt_in]
+  standard_name = transport_option_for_convection
+  long_name = flag for tracer transport: 1=Flux-Form, 2=Hole-Filling, 3=Advective
+  units = flag
+  dimensions = ()
+  type = integer
+  intent = in
+  optional = True
+[use_mass_fixer_in]
+  standard_name = flag_for_tracer_mass_fixer
+  long_name = flag to enable proportional tracer mass fixer
+  units = flag
+  dimensions = ()
+  type = logical
+  intent = in
+  optional = True

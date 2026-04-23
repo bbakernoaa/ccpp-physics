@@ -96,11 +96,14 @@
      &     dot,ncloud,ud_mf,dd_mf,dt_mf,cnvw,cnvc,                      &
      &     qlcn,qicn,w_upi,cf_upi,cnv_mfd,                              &
      &     cnv_dqldt,clcn,cnv_fice,cnv_ndrop,cnv_nice,mp_phys,          &
-     &     mp_phys_mg,clam,c0,c1,betal,betas,evfact,evfactl,pgcon,      &
+     &     mp_phys_mg,clam,c0,c1,betal,betas,evfact,evfactl,pgcon, transport_opt_in, use_mass_fixer_in,      &
      &     errmsg,errflg)
 !
       use machine , only : kind_phys
       use funcphys , only : fpvs
+      use tracer_transport_mod, only: calc_column_mass,                 &
+     &    transport_tracer_flux_form, transport_tracer_advective,       &
+     &    transport_tracer_hole_filling, apply_mass_fixer
 !      use physcons, grav => con_g, cp => con_cp, hvap => con_hvap       &
 !     &,             rv => con_rv, fv => con_fvirt, t0c => con_t0c       &
 !     &,             cvap => con_cvap, cliq => con_cliq                  &
@@ -136,6 +139,8 @@
      &                                    cnv_nice(:,:),  cf_upi(:,:)
       character(len=*),     intent(out) :: errmsg
       integer,              intent(out) :: errflg
+      integer, intent(in), optional :: transport_opt_in
+      logical, intent(in), optional :: use_mass_fixer_in
 !
 ! Local variables
 !
@@ -206,6 +211,14 @@
 !
       real(kind=kind_phys) pfld(im,km),    to(im,km),     qo(im,km),
      &                     uo(im,km),      vo(im,km),     qeso(im,km)
+!
+      real(kind=kind_phys) mass_init_q1(im), mass_init_qlc(im),         &
+     &                     mass_init_qli(im), zero_sink(im),            &
+     &                     mnet_work(im,km)
+      integer            :: transport_opt = 1
+      logical            :: use_mass_fixer = .true.
+      if (present(transport_opt_in)) transport_opt = transport_opt_in
+      if (present(use_mass_fixer_in)) use_mass_fixer = use_mass_fixer_in
 !  cloud water
 !     real(kind=kind_phys) tvo(im,km)
       real(kind=kind_phys) qlko_ktcon(im), dellal(im,km), tvo(im,km),
@@ -621,6 +634,11 @@
           endif
         endif
       enddo
+!
+      zero_sink(:) = 0.0
+      call calc_column_mass(im, km, cnvflg, q1, delp, mass_init_q1)
+      call calc_column_mass(im, km, cnvflg, qlc, delp, mass_init_qlc)
+      call calc_column_mass(im, km, cnvflg, qli, delp, mass_init_qli)
 !!
       totflg = .true.
       do i=1,im
@@ -2068,7 +2086,7 @@
           if(cnvflg(i).and.rn(i).le.0.) then
             if (k .le. kmax(i)) then
               t1(i,k) = to(i,k)
-              q1(i,k) = qo(i,k)
+!              q1(i,k) = qo(i,k)
               u1(i,k) = uo(i,k)
               v1(i,k) = vo(i,k)
             endif
@@ -2105,6 +2123,46 @@
           endif
         enddo
       enddo
+!
+! --- New Conservative Tracer Transport ---
+      do k = 1, km
+        do i = 1, im
+          mnet_work(i,k) = (ud_mf(i,k) - dd_mf(i,k)) / dt2
+        enddo
+      enddo
+!
+      select case(transport_opt)
+      case(1)
+        call transport_tracer_flux_form(im, km, dt2, cnvflg, delp,       &
+     &                                  mnet_work, q1)
+        call transport_tracer_flux_form(im, km, dt2, cnvflg, delp,       &
+     &                                  mnet_work, qlc)
+        call transport_tracer_flux_form(im, km, dt2, cnvflg, delp,       &
+     &                                  mnet_work, qli)
+      case(2)
+        call transport_tracer_hole_filling(im, km, dt2, cnvflg, delp,   &
+     &                                     mnet_work, q1)
+        call transport_tracer_hole_filling(im, km, dt2, cnvflg, delp,   &
+     &                                     mnet_work, qlc)
+        call transport_tracer_hole_filling(im, km, dt2, cnvflg, delp,   &
+     &                                     mnet_work, qli)
+      case(3)
+        call transport_tracer_advective(im, km, dt2, cnvflg, delp,      &
+     &                                  mnet_work, q1)
+        call transport_tracer_advective(im, km, dt2, cnvflg, delp,      &
+     &                                  mnet_work, qlc)
+        call transport_tracer_advective(im, km, dt2, cnvflg, delp,      &
+     &                                  mnet_work, qli)
+      end select
+!
+      if (use_mass_fixer) then
+        call apply_mass_fixer(im, km, cnvflg, delp, rn,                 &
+     &                        mass_init_q1, q1)
+        call apply_mass_fixer(im, km, cnvflg, delp, zero_sink,          &
+     &                        mass_init_qlc, qlc)
+        call apply_mass_fixer(im, km, cnvflg, delp, zero_sink,          &
+     &                        mass_init_qli, qli)
+      endif
 
       if(mp_phys == mp_phys_mg) then
         do k=1,km
