@@ -110,7 +110,7 @@
                  omegaout(i,k) = omega(i,k)
                  endif
 
-                 omegaout(i,k) = MAX(MIN(omegaout(i,k), -1.2), -80.0)
+                 omegaout(i,k) = MAX(MIN(omegaout(i,k), -1.2_kind_phys), -80.0_kind_phys)
                 
               endif
            endif

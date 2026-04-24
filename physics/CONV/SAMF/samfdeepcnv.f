@@ -3206,7 +3206,7 @@ c
         tsump(i) = 0.
         rtnp(i) = 1.
       enddo
-      do k = 1,km1
+      do k = 1,km
         do i = 1,im
           if(cnvflg(i) .and. k <= ktcon(i)) then
             tem = new_q1(i,k) * delp(i,k) / grav
@@ -3226,7 +3226,7 @@ c
           endif
         endif
       enddo
-      do k = 1,km1
+      do k = 1,km
         do i = 1,im
           if(cnvflg(i) .and. k <= ktcon(i)) then
             if(rtnp(i) < 0.) then
@@ -3268,7 +3268,7 @@ c
           tsump(i) = 0.
           rtnp(i) = 1.
         enddo
-        do k = 1,km1
+        do k = 1,km
           do i = 1,im
             if(cnvflg(i) .and. k <= ktcon(i)) then
               if(n == indx) then
@@ -3297,7 +3297,7 @@ c
             endif
           endif
         enddo
-        do k = 1,km1
+        do k = 1,km
           do i = 1,im
             if(cnvflg(i) .and. k <= ktcon(i)) then
               if(rtnp(i) < 0.) then
