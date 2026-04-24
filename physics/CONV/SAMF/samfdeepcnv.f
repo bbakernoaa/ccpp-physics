@@ -9,7 +9,7 @@
       use samfcnv_aerosols, only : samfdeepcnv_aerosols
       use progsigma, only : progsigma_calc
       use progomega, only : progomega_calc
-      
+
       contains
 
       subroutine samfdeepcnv_init(imfdeepcnv,imfdeepcnv_samf,            &
@@ -91,6 +91,10 @@
 !
       use machine , only : kind_phys
       use funcphys , only : fpvs
+!     use samf_mass_check, only : samf_mass_check_init,
+!    &                            samf_mass_check_snapshot,
+!    &                            samf_mass_check_report,
+!    &                            samf_mass_check_dellae
 
       implicit none
 !
@@ -100,7 +104,7 @@
      &   fv, grav, hvap, rd, rv, t0c
       real(kind=kind_phys), intent(in) ::  delt, cscale
       real(kind=kind_phys), intent(in) :: psp(:), delp(:,:),            &
-     &   prslp(:,:),  garea(:), hpbl(:), dot(:,:), phil(:,:) 
+     &   prslp(:,:),  garea(:), hpbl(:), dot(:,:), phil(:,:)
       real(kind=kind_phys), dimension(:), intent(in) :: fscav
       logical, intent(in)  :: first_time_step,restart,hwrf_samfdeep,    &
      &     progsigma,progomega,do_mynnedmf,sigmab_coldstart
@@ -119,7 +123,7 @@
       ! DH* TODO - check dimensions of qtr, ntr+2 correct?  *DH
       real(kind=kind_phys), intent(inout) :: cnvw(:,:),  cnvc(:,:),     &
      &                                       tkeh(:,:)
-      
+
       real(kind=kind_phys), intent(in) :: qtr(:,:,:), q1(:,:)
       real(kind=kind_phys), intent(in) :: t1(:,:), u1(:,:), v1(:,:)
 
@@ -216,11 +220,11 @@ cj
 !  parameters for updraft velocity calculation
       real(kind=kind_phys) bb1, bb2, csmf, wucb
 !
-!  parameters for prognostic sigma closure                                                                                                                                                      
+!  parameters for prognostic sigma closure
       real(kind=kind_phys) omega_u(im,km),zdqca(im,km),tmfq(im,km),
      &     omegac(im),zeta(im,km),dbyo1(im,km),sigmab(im),qadv(im,km)
       real(kind=kind_phys) gravinv,invdelt,sigmind,sigminm,sigmins,
-     &     wc_min, wc_eff 
+     &     wc_min, wc_eff
       logical flag_shallow, flag_mid
 c  physical parameters
 !     parameter(grav=grav,asolfac=0.958)
@@ -323,11 +327,16 @@ c    &            .743,.813,.886,.947,1.138,1.377,1.896/
       ten_q = 0._kind_phys
       dqtr  = 0._kind_phys
 
-      new_t1 = t1 
-      new_u1 = u1 
+      new_t1 = t1
+      new_u1 = u1
       new_v1 = v1
       new_q1 = q1
       new_qtr = qtr
+
+!!MASS_CHECK: initialise diagnostic storage
+!      if (.not.hwrf_samfdeep) then
+!        call samf_mass_check_init(im, ntr)
+!      endif
 
       ! Initialize CCPP error handling variables
       errmsg = ''
@@ -335,6 +344,12 @@ c    &            .743,.813,.886,.947,1.138,1.377,1.896/
 
       gravinv = 1./grav
       invdelt = 1./delt
+
+!!MASS_CHECK CP0: baseline – qtr as passed in (before any convection)
+!      if (.not.hwrf_samfdeep) then
+!        call samf_mass_check_snapshot('CP0_baseline',
+!     &       im, km, ntr, del, grav, cnvflg, kmax, qtr(1,1,3))
+!      endif
 
       elocp = hvap/cp
       el2orc = hvap*hvap/(rv*cp)
@@ -376,7 +391,7 @@ c-----------------------------------------------------------------------
             wc_min = 0.2
          endif
       endif
-      
+
       km1 = km - 1
 !>  - Initialize column-integrated and other single-value-per-column variable arrays.
 c
@@ -712,7 +727,7 @@ c
         kb1(i) = min(kb1(i),kbm(i))
       enddo
 c
-!> - Search below index "kbm" and above kb1 for the level of maximum moist static energy.                         
+!> - Search below index "kbm" and above kb1 for the level of maximum moist static energy.
       do i=1,im
         hmax(i) = heo(i,kb1(i))
         kb(i) = kb1(i)
@@ -1736,8 +1751,8 @@ c
 !             aa2(i) = aa2(i) +
 !!   &                 dz1 * eta(i,k) * grav * fv *
 !    &                 dz1 * grav * fv *
-!    &                 max(val,(qeso(i,k) - qo(i,k)))        
-!NRL MNM: Limit overshooting not to be deeper than half the actual cloud              
+!    &                 max(val,(qeso(i,k) - qo(i,k)))
+!NRL MNM: Limit overshooting not to be deeper than half the actual cloud
               tem  = 0.5 * (zi(i,ktcon(i))-zi(i,kbcon(i)))
               tem1 = zi(i,k)-zi(i,ktcon(i))
               if(aa2(i) < 0. .or. tem1 >= tem) then
@@ -1798,7 +1813,7 @@ c
 !  compute updraft velocity square(wu2)
 !> - Calculate diagnostic updraft velocity square(wu2) according to Han et al.'s (2017) \cite han_et_al_2017 equation 7.
 !> - if progomega = true, calculate prognostic updraft velocity (Pa/s) according to progomega routine.
-      
+
       if (hwrf_samfdeep) then
          do i = 1, im
             if (cnvflg(i)) then
@@ -1813,7 +1828,7 @@ c
             endif
          enddo
       endif
-!                  
+!
       if (progomega) then
          call progomega_calc(first_time_step,restart,im,km,
      &        kbcon1,ktcon,omegain,delt,del,zi,cnvflg,omegaout,
@@ -1866,7 +1881,7 @@ c
          enddo
 
       endif                     !progomega
-     
+
 !
 !  compute updraft velocity average over the whole cumulus
 !> - Calculate the mean updraft velocity within the cloud (wc).
@@ -1896,9 +1911,9 @@ c
           val = 1.e-4
           if (wc(i) < val) cnvflg(i)=.false.
         endif
-      enddo      
+      enddo
 c
-!> - For progsigma = T, calculate the mean updraft velocity within the cloud (omegac),cast in pressure coordinates.                                                                                                                                  
+!> - For progsigma = T, calculate the mean updraft velocity within the cloud (omegac),cast in pressure coordinates.
       if(progsigma)then
          do i = 1, im
             omegac(i) = 0.
@@ -1944,7 +1959,7 @@ c
                endif
             enddo
          enddo
-      
+
 
       endif !if progsigma
 
@@ -2536,16 +2551,32 @@ c
               endif
 !
 ! subtract the double counting change rates at jmin+1 & kb beforehand
+! The standard dellae pass already included the first-order interface flux
+! at these two levels (using ecdo/ecko, the in-cloud tracer mixing ratios).
+! The TVD pass adds flxtvd = tem * tem1 where tem1 is the TVD-limited
+! interface value (van Leer limiter applied to the gradient ratio rrkp).
+! To avoid double-counting we subtract the first-order contribution back out,
+! which must use ecdo/ecko -- NOT tem1.  tem1 == ecdo/ecko only for a linear
+! profile (rrkp=1); for curved profiles tem1 < ecdo/ecko and using tem1 here
+! would leave a spurious residual tracer source/sink every timestep.
 !
               if(k == jmin(i)) then
                 dp = 1000. * del(i,k+1)
                 dellae(i,k+1,n) = dellae(i,k+1,n) -
-     &              edto(i)*etad(i,k) * tem1 * grav/dp
+     &              edto(i)*etad(i,k) * ecdo(i,k,n) * grav/dp
+!                                      ^^^^^^^^^^^^ in-cloud downdraft tracer
+!                                      mixing ratio at the downdraft turn-around
+!                                      level (jmin); matches the value used by
+!                                      the first-order dellae pass above
               endif
               if(k == kb(i)) then
                 dp = 1000. * del(i,k)
                 dellae(i,k,n) = dellae(i,k,n) -
-     &              eta(i,k) * tem1 * grav/dp
+     &              eta(i,k) * ecko(i,k,n) * grav/dp
+!                              ^^^^^^^^^^^^ in-cloud updraft tracer mixing ratio
+!                              at cloud base (kb); matches the value used by the
+!                              first-order dellae pass above (not tem1, the
+!                              TVD-limited interface estimate)
               endif
 !
             endif
@@ -2949,7 +2980,7 @@ c
             if (.not. hwrf_samfdeep) then
                tfac = 1. + gdx(i) / 75000.
                dtconv(i) = tfac * dtconv(i)
-            endif  
+            endif
          !bounds
             dtconv(i) = max(dtconv(i), dtmin)
             dtconv(i) = min(dtconv(i), dtmax)
@@ -2984,11 +3015,11 @@ c
            advfac(i) = min(cat_adj_deep*advfac(i), 1.)
         endif
       enddo
-      
+
 !> - From Bengtsson et al. (2022) \cite Bengtsson_2022 prognostic closure scheme, equation 8, call progsigma_calc() to compute updraft area fraction based on a moisture budget
       if(progsigma)then
-!Initial computations, dynamic q-tendency                                                                                                                                               
-         if(first_time_step .and. (.not.restart 
+!Initial computations, dynamic q-tendency
+         if(first_time_step .and. (.not.restart
      &           .or. sigmab_coldstart))then
             do k = 1,km
                do i = 1,im
@@ -3002,7 +3033,7 @@ c
                enddo
             enddo
          endif
-         
+
          do k = 1,km
             do i = 1,im
                tmfq(i,k)=tmf(i,k,1)
@@ -3148,7 +3179,13 @@ c
         enddo
         enddo
       endif
-c!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!!MASS_CHECK CP1: pre-feedback – ctro just reset from qtr
+!      if (.not.hwrf_samfdeep) then
+!        call samf_mass_check_snapshot('CP1_pre_feedback',
+!     &       im, km, ntr, del, grav, cnvflg, kmax, ctro)
+!      endif
+c!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 c
 c--- feedback: simply the changes from the cloud with unit mass flux
 c---           multiplied by  the mass flux necessary to keep the
@@ -3323,6 +3360,15 @@ c
         enddo
 !
        enddo
+
+!!MASS_CHECK CP2: after dellae*xmb*dt2 applied and written to new_qtr
+!!  (only layers <= ktcon were updated; layers above keep original qtr)
+!       call samf_mass_check_snapshot('CP2_post_transport',
+!     &      im, km, ntr, del, grav, cnvflg, kmax,
+!     &      new_qtr(1,1,3))
+!!MASS_CHECK: column integral of dellae (should be ~0 for passive tracers)
+!       call samf_mass_check_dellae(im, km, ntr, del, grav,
+!     &      cnvflg, kmax, ktcon, dellae, xmb, dt2, 1.e-10_kind_phys)
 !
        if (do_aerosols) then
 !
@@ -3456,7 +3502,7 @@ c
         enddo
       enddo
 
-!LB:                                                                                                                                                                                                                                                  
+!LB:
       if(do_ca)then
          do i = 1,im
             rainevap(i)=delqev(i)
@@ -3506,7 +3552,7 @@ c
                if (k >= kbcon(i) .and. k < ktcon(i)) then
                   cnvw(i,k) = cnvwt(i,k) * xmb(i) * dt2
                   if(progsigma)then
-                     cnvw(i,k) = cnvw(i,k) * cscale 
+                     cnvw(i,k) = cnvw(i,k) * cscale
                   else
                      cnvw(i,k) = cnvw(i,k) * cscale
                   endif
@@ -3554,6 +3600,15 @@ c
       enddo
 !
       endif
+
+!!MASS_CHECK CP3: after dellal cloud-water detrainment added to qtr(1:2)
+!!  For passive tracers (n>2) this should not change CP2 mass.
+!!  Any change here is due to dellal touching qtr indices 1 and 2 only.
+!      if (.not.hwrf_samfdeep) then
+!        call samf_mass_check_snapshot('CP3_post_dellal',
+!     &       im, km, ntr, del, grav, cnvflg, kmax,
+!     &       new_qtr(1,1,3))
+!      endif
 c
 !> - If convective precipitation is zero or negative, reset the updated state variables back to their original values (negating convective changes).
       do k = 1, km
@@ -3608,6 +3663,12 @@ c
 !       enddo
 !      endif
       endif
+!!MASS_CHECK CP4: after rn<=0 rollback (new_qtr reverted to ctro for failed cols)
+!      if (.not.hwrf_samfdeep) then
+!        call samf_mass_check_snapshot('CP4_post_rollback',
+!     &       im, km, ntr, del, grav, cnvflg, kmax,
+!     &       new_qtr(1,1,3))
+!      endif
 !
 ! hchuang code change
 !
@@ -3703,9 +3764,17 @@ c
 
       ten_t = (new_t1 - t1)/delt
       ten_q(:,:,1) = (new_q1 - q1)/delt
-      ten_u = (new_u1 - u1)/delt 
+      ten_u = (new_u1 - u1)/delt
       ten_v = (new_v1 - v1)/delt
       dqtr  = (new_qtr - qtr)/delt
+
+!!MASS_CHECK CP5: final new_qtr after all steps
+!      if (.not.hwrf_samfdeep) then
+!        call samf_mass_check_snapshot('CP5_final',
+!     &       im, km, ntr, del, grav, cnvflg, kmax,
+!     &       new_qtr(1,1,3))
+!        call samf_mass_check_report(ntr, 1.0e-8_kind_phys)
+!      endif
 
       return
       end subroutine samfdeepcnv_run
