@@ -2197,7 +2197,7 @@ c
         tsump(i) = 0.
         rtnp(i) = 1.
       enddo
-      do k = 1,km1
+      do k = 1,km
         do i = 1,im
           if (cnvflg(i)) then
             if(k > kb(i) .and. k <= ktcon(i)) then
@@ -2219,7 +2219,7 @@ c
           endif
         endif
       enddo
-      do k = 1,km1
+      do k = 1,km
         do i = 1,im
           if (cnvflg(i)) then
             if(k > kb(i) .and. k <= ktcon(i)) then
@@ -2264,7 +2264,7 @@ c
           tsump(i) = 0.
           rtnp(i) = 1.
         enddo
-        do k = 1,km1
+        do k = 1,km
           do i = 1,im
             if (cnvflg(i)) then
               if(k > kb(i) .and. k <= ktcon(i)) then
@@ -2295,7 +2295,7 @@ c
             endif
           endif
         enddo
-        do k = 1,km1
+        do k = 1,km
         do i = 1,im
           if (cnvflg(i)) then
             if(k > kb(i) .and. k <= ktcon(i)) then

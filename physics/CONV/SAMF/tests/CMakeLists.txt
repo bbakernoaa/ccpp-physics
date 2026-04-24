@@ -1,0 +1,5 @@
+cmake_minimum_required(VERSION 3.10)
+project(samf_unit_tests Fortran)
+add_executable(test_fixer_cons test_fixer_cons.f90)
+enable_testing()
+add_test(NAME test_fixer_cons COMMAND test_fixer_cons)
