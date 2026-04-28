@@ -2403,7 +2403,8 @@ c
       do n = 1, ntr
       do i = 1, im
         if(cnvflg(i)) then
-          indx = ktcon(i)
+          ! Use ktcon1 to detrain at the original neutral buoyancy level
+          indx = ktcon1(i)
           dp = 1000. * del(i,indx)
           dellae(i,indx,n) = eta(i,indx-1) *
      &             ecko(i,indx-1,n) * grav / dp
@@ -2549,34 +2550,17 @@ c
                 tem1 = ctro(i,k,n)
                 flxtvd(i,k) = 0.
               endif
-!
-! subtract the double counting change rates at jmin+1 & kb beforehand
-! The standard dellae pass already included the first-order interface flux
-! at these two levels (using ecdo/ecko, the in-cloud tracer mixing ratios).
-! The TVD pass adds flxtvd = tem * tem1 where tem1 is the TVD-limited
-! interface value (van Leer limiter applied to the gradient ratio rrkp).
-! To avoid double-counting we subtract the first-order contribution back out,
-! which must use ecdo/ecko -- NOT tem1.  tem1 == ecdo/ecko only for a linear
-! profile (rrkp=1); for curved profiles tem1 < ecdo/ecko and using tem1 here
-! would leave a spurious residual tracer source/sink every timestep.
+! subtract the double counting using the ACTUAL layer mean ingested
 !
               if(k == jmin(i)) then
                 dp = 1000. * del(i,k+1)
                 dellae(i,k+1,n) = dellae(i,k+1,n) -
-     &              edto(i)*etad(i,k) * ecdo(i,k,n) * grav/dp
-!                                      ^^^^^^^^^^^^ in-cloud downdraft tracer
-!                                      mixing ratio at the downdraft turn-around
-!                                      level (jmin); matches the value used by
-!                                      the first-order dellae pass above
+     &              edto(i)*etad(i,k) * ctro(i,k+1,n) * grav/dp
               endif
               if(k == kb(i)) then
                 dp = 1000. * del(i,k)
                 dellae(i,k,n) = dellae(i,k,n) -
-     &              eta(i,k) * ecko(i,k,n) * grav/dp
-!                              ^^^^^^^^^^^^ in-cloud updraft tracer mixing ratio
-!                              at cloud base (kb); matches the value used by the
-!                              first-order dellae pass above (not tem1, the
-!                              TVD-limited interface estimate)
+     &              eta(i,k) * ctro(i,k,n) * grav/dp
               endif
 !
             endif
@@ -3297,57 +3281,40 @@ c
         enddo
         enddo
 !
-! Negative TKE, ozone, and aerosols are set to zero after borrowing them
-!     from positive values within the mass-flux transport layers
+! Localized Two-Pass Sweep for Tracer Positivity
+! Conserves column mass locally to avoid unphysical teleportation
 !
-        do i = 1,im
-          tsumn(i) = 0.
-          tsump(i) = 0.
-          rtnp(i) = 1.
-        enddo
-        do k = 1,km1
-          do i = 1,im
-            if(cnvflg(i) .and. k <= ktcon(i)) then
-              if(n == indx) then
-                if(k > 1) then
-                  dz = zi(i,k) - zi(i,k-1)
-                else
-                  dz = zi(i,k)
-                endif
-                tem = ctr(i,k,n) * dz
-              else
-                tem = ctr(i,k,n) * delp(i,k) / grav
+        ! Pass 1: Bottom-to-Top Sweep
+        do k = 1, km1
+          do i = 1, im
+            if(cnvflg(i) .and. k < ktcon(i)) then
+              if(ctr(i,k,n) < 0.) then
+                tem = ctr(i,k,n) * delp(i,k)
+                ctr(i,k+1,n) = ctr(i,k+1,n) + (tem / delp(i,k+1))
+                ctr(i,k,n) = 0.
               endif
-              if(ctr(i,k,n) < 0.) tsumn(i) = tsumn(i) + tem
-              if(ctr(i,k,n) > 0.) tsump(i) = tsump(i) + tem
             endif
           enddo
         enddo
+
+        ! Pass 2: Top-to-Bottom Sweep
+        do k = km, 2, -1
+          do i = 1, im
+            if(cnvflg(i) .and. k <= ktcon(i)) then
+              if(ctr(i,k,n) < 0.) then
+                tem = ctr(i,k,n) * delp(i,k)
+                ctr(i,k-1,n) = ctr(i,k-1,n) + (tem / delp(i,k-1))
+                ctr(i,k,n) = 0.
+              endif
+            endif
+          enddo
+        enddo
+
+        ! Final safety clip at the surface to prevent model crash
         do i = 1,im
           if(cnvflg(i)) then
-            if(tsump(i) > 0. .and. tsumn(i) < 0.) then
-              if(tsump(i) > abs(tsumn(i))) then
-                rtnp(i) = tsumn(i) / tsump(i)
-              else
-                rtnp(i) = tsump(i) / tsumn(i)
-              endif
-            endif
+            if(ctr(i,1,n) < 0.) ctr(i,1,n) = 0.
           endif
-        enddo
-        do k = 1,km1
-          do i = 1,im
-            if(cnvflg(i) .and. k <= ktcon(i)) then
-              if(rtnp(i) < 0.) then
-                if(tsump(i) > abs(tsumn(i))) then
-                  if(ctr(i,k,n)<0.) ctr(i,k,n)=0.
-                  if(ctr(i,k,n)>0.) ctr(i,k,n)=(1.+rtnp(i))*ctr(i,k,n)
-                else
-                  if(ctr(i,k,n)<0.) ctr(i,k,n)=(1.+rtnp(i))*ctr(i,k,n)
-                  if(ctr(i,k,n)>0.) ctr(i,k,n)=0.
-                endif
-              endif
-            endif
-          enddo
         enddo
 !
         kk = n+2
@@ -3387,28 +3354,6 @@ c
             enddo
           enddo
 !
-          kk = n + itc - 1
-          do k = 2, km1
-            do i = 1, im
-              if (cnvflg(i)) then
-                if(k > kb(i) .and. k < ktcon(i)) then
-                  dp = 1000. * del(i,k)
-                  if (new_qtr(i,k,kk) < 0.) then
-!   borrow negative mass from wet deposition
-                    tem = -new_qtr(i,k,kk)*dp
-                    if(wet_dep(i,k,n) >= tem) then
-                      wet_dep(i,k,n) = wet_dep(i,k,n) - tem
-                      new_qtr(i,k,kk) = 0.
-                    else
-                      wet_dep(i,k,n) = 0.
-                      new_qtr(i,k,kk) = new_qtr(i,k,kk)+                &
-     &                                  wet_dep(i,k,n)/dp
-                    endif
-                  endif
-                endif
-              endif
-            enddo
-          enddo
 !
         enddo
 !
