@@ -52,12 +52,12 @@
 !!  \section det_samfshalcnv GFS samfshalcnv Detailed Algorithm
       subroutine samfshalcnv_run(im,km,itc,ntc,cliq,cp,cvap,            &
      &     eps,epsm1,fv,grav,hvap,rd,rv,                                &
-     &     t0c,delt,ntk,ntr,delp,first_time_step,restart,               & 
+     &     t0c,delt,ntk,ntr,delp,first_time_step,restart,               &
      &     tmf,qmicro,progsigma,                                        &
      &     prslp,psp,phil,qtr,prevsq,q,q1,t1,u1,v1,fscav,               &
      &     rn,kbot,ktop,kcnv,islimsk,garea,                             &
      &     dot,ncloud,hpbl,ud_mf,dt_mf,cnvw,cnvc,                       &
-     &     clam,c0s,c1,evef,pgcon,asolfac,hwrf_samfshal,                & 
+     &     clam,c0s,c1,evef,pgcon,asolfac,hwrf_samfshal,                &
      &     sigmain,sigmaout,betadcu,betamcu,betascu,errmsg,errflg)
 !
       use machine , only : kind_phys
@@ -128,7 +128,7 @@
      &                     ptem,    ptem1
 !
       integer              kb(im), kb1(im), kbcon(im), kbcon1(im),
-     &                     ktcon(im), ktcon1(im), 
+     &                     ktcon(im), ktcon1(im),
      &                     kbm(im), kmax(im)
 !
       real(kind=kind_phys) aa1(im),     cina(im),
@@ -370,7 +370,7 @@ c
 !>  - determine scale-aware rain conversion parameter decreasing with decreasing grid size
       do i=1,im
         if(gdx(i) < dxcrtc0) then
-          tem = gdx(i) / dxcrtc0 
+          tem = gdx(i) / dxcrtc0
           tem1 = tem**3
           c0(i) = c0(i) * tem1
         endif
@@ -1512,7 +1512,7 @@ c
         enddo
       enddo
 !
-      if(progsigma)then                                                                                                                               
+      if(progsigma)then
           do k = 2, km1
             do i = 1, im
                if (cnvflg(i)) then
@@ -1524,7 +1524,7 @@ c
                endif
             enddo
          enddo
-      endif    
+      endif
 
 !  compute updraft velocity averaged over the whole cumulus
 !
@@ -1557,8 +1557,8 @@ c
         endif
       enddo
 c
-!> - For progsigma =T, calculate the mean updraft velocity in pressure coordinates within the cloud (wc).                                                                                        
-      if(progsigma)then                                                                                                                               
+!> - For progsigma =T, calculate the mean updraft velocity in pressure coordinates within the cloud (wc).
+      if(progsigma)then
          do i = 1, im
             omegac(i) = 0.
             sumx(i) = 0.
@@ -1641,7 +1641,7 @@ c
       enddo
       endif
 c
-     
+
 c--- compute precipitation efficiency in terms of windshear
 c
 !! - Calculate the wind shear and precipitation efficiency according to equation 58 in Fritsch and Chappell (1980) \cite fritsch_and_chappell_1980 :
@@ -1886,7 +1886,12 @@ c
                 phkp = (rrkp+abs(rrkp)) / (1.+abs(rrkp))
                 tem1 = ctr(i,k+1,n) +
      &                     phkp*(ctro(i,k,n)-ctr(i,k+1,n))
-                flxtvd(i,k) = eta(i,k) * tem1
+                if(k == kb(i)) then
+                  flxtvd(i,k) = eta(i,k) *
+     &                merge(ecko(i,k,n), tem1, n/=ntk)
+                else
+                  flxtvd(i,k) = eta(i,k) * tem1
+                endif
               endif
             endif
           enddo
