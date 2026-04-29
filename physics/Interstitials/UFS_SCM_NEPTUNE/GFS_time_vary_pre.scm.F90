@@ -30,7 +30,7 @@
          errflg = 0
 
          if (is_initialized) return
- 
+
          !--- Call gfuncphys (funcphys.f) to compute all physics function tables.
          call gfuncphys ()
 
@@ -67,7 +67,8 @@
 !!
       subroutine GFS_time_vary_pre_timestep_init (jdat, idat, dtp, nsswr, &
         nslwr, idate, debug, me, master, nscyc, sec, phour, zhour, fhour, kdt,   &
-        julian, yearlen, ipt, lprnt, lssav, lsswr, lslwr, solhr, errmsg, errflg)
+        julian, yearlen, ipt, lprnt, lssav, lsswr, lslwr, solhr, tgrs, ugrs, vgrs, qgrs, &
+        gt0 , gu0 , gv0 , gq0 , errmsg, errflg)
 
         use machine,               only: kind_phys, kind_dbl_prec, kind_sngl_prec
 
@@ -86,6 +87,11 @@
         real(kind=kind_phys),             intent(out)   :: sec, phour, zhour,    &
                                                            fhour, julian, solhr
         
+        real(kind=kind_phys), intent(in ), dimension(:,:)   :: tgrs, ugrs, vgrs
+        real(kind=kind_phys), intent(in ), dimension(:,:,:) :: qgrs
+        real(kind=kind_phys), intent(out), dimension(:,:)   :: gt0, gu0, gv0
+        real(kind=kind_phys), intent(out), dimension(:,:,:) :: gq0
+        
         character(len=*),                 intent(out)   :: errmsg
         integer,                          intent(out)   :: errflg
 
@@ -93,7 +99,8 @@
         real(kind=kind_phys), parameter :: con_hr  = 3600.0_kind_phys
         real(kind=kind_dbl_prec)  :: rinc8(5)
 
-        integer ::  iw3jdn      
+        integer :: w3kindreal, w3kindint
+        integer :: iw3jdn
         integer :: jd0, jd1
         real    :: fjd
 
@@ -108,13 +115,27 @@
            errflg = 1
            return
         end if
-
+        
+        !--- set current state variables from timestep initial variables
+        gt0(:,:)   = tgrs(:,:)
+        gu0(:,:)   = ugrs(:,:)
+        gv0(:,:)   = vgrs(:,:)
+        gq0(:,:,:) = qgrs(:,:,:)
+        
         !--- jdat is being updated directly inside of the time integration
         !--- loop of scm.F90
         !--- update calendars and triggers
-        rinc8(1:5) = 0
-        call w3difdat(jdat,idat,4,rinc8)
-        sec = rinc8(4)
+        call w3kind(w3kindreal, w3kindint)
+        !--- CCPP uses w3emc_d, therefore expecting the following values
+        if (w3kindreal == 8 .and. w3kindint==4) then
+           rinc8(1:5) = 0
+           call w3difdat(jdat,idat,4,rinc8)
+           sec = rinc8(4)
+        else
+           write(errmsg,'(*(a))') "FATAL ERROR: Invalid w3kindreal or w3kindint:", w3kindreal, w3kindint
+           errflg = 1
+           return
+        end if
         phour = sec/con_hr
         !--- set current bucket hour
         zhour = phour

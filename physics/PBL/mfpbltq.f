@@ -378,6 +378,9 @@ c  local variables and arrays
       do k = 1, kmpbl
         do i = 1, im
           if (cnvflg(i) .and. k < kpbl(i)) then
+             if (sigma(i) > a1) then
+               xmf(i,k) = sigma(i) * xmf(i,k) / a1
+             endif
              xmf(i,k) = scaldfunc(i) * xmf(i,k)
              dz   = zl(i,k+1) - zl(i,k)
              xmmx = dz / dt2

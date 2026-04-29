@@ -45,7 +45,7 @@
   kind = kind_phys
   intent = in
 [t]
-  standard_name = air_temperature
+  standard_name = physics_timestep_initial_air_temperature
   long_name = model layer mean temperature
   units = K
   dimensions = (horizontal_loop_extent,vertical_layer_dimension)
@@ -53,7 +53,7 @@
   kind = kind_phys
   intent = in
 [q]
-  standard_name = specific_humidity
+  standard_name = physics_timestep_initial_specific_humidity
   long_name = water vapor specific humidity
   units = kg kg-1
   dimensions = (horizontal_loop_extent,vertical_layer_dimension)
@@ -68,7 +68,6 @@
   type = real
   kind = kind_phys
   intent = in
-  optional = True
 [prevsq]
   standard_name = specific_humidity_on_previous_timestep
   long_name = moisture from previous time step
@@ -77,7 +76,6 @@
   type = real
   kind = kind_phys
   intent = in
-  optional = True
 [forcet]
   standard_name = tendency_of_air_temperature_due_to_nonphysics
   long_name = temperature tendency due to dynamics only
@@ -86,7 +84,6 @@
   type = real
   kind = kind_phys
   intent = out
-  optional = True
 [forceq]
   standard_name = tendendy_of_specific_humidity_due_to_nonphysics
   long_name = moisture tendency due to dynamics only
@@ -95,7 +92,6 @@
   type = real
   kind = kind_phys
   intent = out
-  optional = True
 [errmsg]
   standard_name = ccpp_error_message
   long_name = error message for error handling in CCPP

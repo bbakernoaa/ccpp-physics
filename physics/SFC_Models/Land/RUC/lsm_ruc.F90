@@ -88,22 +88,22 @@ module lsm_ruc
       real (kind_phys), dimension(:,:), intent(in) :: smc,slc,stc
       real (kind_phys), intent(in) :: min_seaice
 !  ---  in/out:
-      real (kind_phys), dimension(:), intent(inout), optional :: wetness
+      real (kind_phys), dimension(:), intent(inout) :: wetness
 
 !  ---  inout
-      real (kind_phys), dimension(:,:), intent(inout), optional :: sh2o, smfrkeep
-      real (kind_phys), dimension(:,:), intent(inout), optional :: tslb, smois
+      real (kind_phys), dimension(:,:), intent(inout) :: sh2o, smfrkeep
+      real (kind_phys), dimension(:,:), intent(inout) :: tslb, smois
       real (kind_phys), dimension(:),   intent(inout) :: semis_lnd
       real (kind_phys), dimension(:),   intent(inout) :: semis_ice
       real (kind_phys), dimension(:),   intent(inout) :: &
            albdvis_lnd, albdnir_lnd,  albivis_lnd,  albinir_lnd
-      real (kind_phys), dimension(:),   intent(inout), optional ::            &
+      real (kind_phys), dimension(:),   intent(inout) ::            &
                         albdvis_ice, albdnir_ice,  albivis_ice,  albinir_ice, &
                         sfcqv_lnd, sfcqv_ice
 
 !  ---  out
       real (kind_phys), dimension(:),   intent(out) :: zs
-      real (kind_phys), dimension(:),   intent(inout), optional :: sfalb_lnd_bck
+      real (kind_phys), dimension(:),   intent(inout) :: sfalb_lnd_bck
       real (kind_phys), dimension(:,:), intent(inout) :: tsice
       real (kind_phys), dimension(:),   intent(out) :: semisbase
       real (kind_phys), dimension(:),   intent(out) :: pores, resid
@@ -164,6 +164,7 @@ module lsm_ruc
 
       !--- initialize soil vegetation
       call set_soilveg_ruc(me, isot, ivegsrc, nlunit, errmsg, errflg)
+      if(errflg/=0) return
 
       pores (:) = maxsmc (:)
       resid (:) = drysmc (:)
@@ -213,6 +214,7 @@ module lsm_ruc
                     zs, dzs, smc, slc, stc,                     & ! in
                     sh2o, smfrkeep, tslb, smois,                & ! out
                     wetness, errmsg, errflg)
+      if(errflg/=0) return
 
       if (lsm_cold_start) then
         do i  = 1, im ! i - horizontal loop
@@ -327,7 +329,7 @@ module lsm_ruc
       subroutine lsm_ruc_run                                            & ! inputs
      &     ( iter, me, master, delt, kdt, im, nlev, lsm_ruc, lsm,       &
      &       imp_physics, imp_physics_gfdl, imp_physics_thompson,       &
-     &       imp_physics_nssl, do_mynnsfclay,                           &
+     &       imp_physics_nssl, do_mynnsfclay, use_cdeps_data, mask_dat, &
      &       exticeden, lsoil_ruc, lsoil, mosaic_lu, mosaic_soil,       &
      &       isncond_opt, isncovr_opt, nlcat, nscat,                    &
      &       rdlai, xlat_d, xlon_d,                                     &
@@ -383,7 +385,7 @@ module lsm_ruc
                              imp_physics_nssl
       real (kind_phys), dimension(:), intent(in) :: xlat_d, xlon_d
       real (kind_phys), dimension(:), intent(in) :: oro, sigma
-      real (kind_phys), dimension(:), intent(in), optional :: sfalb_lnd_bck
+      real (kind_phys), dimension(:), intent(in) :: sfalb_lnd_bck
       real (kind_phys), dimension(:), intent(in) ::               &
      &       t1, sigmaf, dlwflx, dswsfc, tg3,                     &
      &       coszen, prsl1, wind, shdmin, shdmax,                 &
@@ -407,6 +409,7 @@ module lsm_ruc
       logical, dimension(:),  intent(in) :: flag_cice
       logical,                intent(in) :: frac_grid
       logical,                intent(in) :: do_mynnsfclay
+      logical,                intent(in) :: use_cdeps_data
       logical,                intent(in) :: exticeden
 
       logical,                intent(in) :: rdlai
@@ -420,7 +423,8 @@ module lsm_ruc
 
       real (kind_phys), dimension(:), intent(in)    :: zs
       real (kind_phys), dimension(:), intent(in)    :: srflag
-      real (kind_phys), dimension(:), intent(inout), optional ::         &
+      real (kind_phys), dimension(:), intent(in), optional  :: mask_dat
+      real (kind_phys), dimension(:), intent(inout) ::                   &
      &      laixy, tsnow_lnd, sfcqv_lnd, sfcqc_lnd, sfcqc_ice, sfcqv_ice,&
      &      tsnow_ice
      real (kind_phys), dimension(:), intent(inout) ::                    &
@@ -433,21 +437,21 @@ module lsm_ruc
      &       tsurf_ice, z0rl_ice, fice
 
 !  ---  in
-      real (kind_phys), dimension(:), intent(in), optional ::            &
+      real (kind_phys), dimension(:), intent(in) ::            &
      &       rainnc, rainc, ice, snow, graupel
       real (kind_phys), dimension(:), intent(in) :: rhonewsn1
-      real (kind_phys), dimension(:), intent(in), optional ::            &
+      real (kind_phys), dimension(:), intent(in) ::            &
            fire_heat_flux_out, frac_grid_burned_out
       logical, intent(in) :: add_fire_heat_flux
 !  ---  in/out:
 !  --- on RUC levels
-      real (kind_phys), dimension(:,:), intent(inout), optional ::       &
+      real (kind_phys), dimension(:,:), intent(inout) ::       &
      &       smois, tslb, sh2o, keepfr, smfrkeep
       real (kind_phys), dimension(:,:), intent(inout) ::                 &
      &      tsice
 
 !  ---  output:
-      real (kind_phys), dimension(:), intent(inout), optional ::         &
+      real (kind_phys), dimension(:), intent(inout) ::                   &
      &       sfalb_lnd, sfalb_ice, wetness, snowfallac_lnd,              &
      &       snowfallac_ice, rhosnf
       real (kind_phys), dimension(:), intent(inout) ::                   &
@@ -456,15 +460,16 @@ module lsm_ruc
      ! for land
      &       sncovr1_lnd, qsurf_lnd, gflux_lnd, evap_lnd,                &
      &       cmm_lnd, chh_lnd, hflx_lnd, sbsno,                          &
-     &       acsnow_lnd, snowmt_lnd, snohf,                              &
+     &       snowmt_lnd, snohf,                                          &
      ! for ice
      &       sncovr1_ice, qsurf_ice, gflux_ice, evap_ice, ep1d_ice,      &
      &       cmm_ice, chh_ice, hflx_ice,                                 &
-     &       acsnow_ice, snowmt_ice
-
+     &       snowmt_ice
+      real (kind_phys), dimension(:), intent(inout) ::                   &
+             acsnow_lnd, acsnow_ice
       real (kind_phys), dimension(:), intent(  out) ::                   &
      &       albdvis_lnd, albdnir_lnd,  albivis_lnd,  albinir_lnd
-      real (kind_phys), dimension(:), intent(  out), optional ::         &
+      real (kind_phys), dimension(:), intent(  out) ::                   &
      &       albdvis_ice, albdnir_ice,  albivis_ice,  albinir_ice
 
       logical,          intent(in)  :: flag_init, lsm_cold_start
@@ -1313,8 +1318,7 @@ module lsm_ruc
 
         ! --- ... accumulated total runoff and surface runoff
         runoff(i)  = runoff(i)  + (drain(i)+runof(i)) * delt  ! accum total kg m-2
-        !srunoff(i) = srunoff(i) + runof(i) * delt             ! accum surface kg m-2
-        srunoff(i) = acrunoff(i,j)        ! accum surface kg m-2
+        srunoff(i) = srunoff(i) + runof(i) * delt             ! accum surface kg m-2
 
         ! --- ... accumulated frozen precipitation (accumulation in lsmruc)
         snowfallac_lnd(i) = snfallac_lnd(i,j) ! accum kg m-2
@@ -1616,13 +1620,19 @@ module lsm_ruc
           else ! flag_guess
             if(debug_print) write (0,*)'iter run', i,j, tskin_ice(i),tsurf_ice(i)
             tskin_lnd(i) = tsurf_lnd(i)
-            tskin_ice(i) = tsurf_ice(i)
+            !don't overwrite surface skin temperature over ice when using CDEPS inline over the mask
+            if (use_cdeps_data) then
+              if (mask_dat(i) <= 0.0) then
+                tskin_ice(i) = tsurf_ice(i)
+              endif
+            else
+              tskin_ice(i) = tsurf_ice(i)
+            endif
           endif ! flag_guess
         endif ! flag
       enddo  ! i
       enddo  ! j
 !
-      return
 !...................................
       end subroutine lsm_ruc_run
 !-----------------------------------
@@ -2021,6 +2031,5 @@ module lsm_ruc
       endif ! debug_print
 
       end subroutine rucinit
-
 
 end module lsm_ruc

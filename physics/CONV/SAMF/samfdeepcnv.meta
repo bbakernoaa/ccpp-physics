@@ -1,7 +1,7 @@
 [ccpp-table-properties]
   name = samfdeepcnv
   type = scheme
-  dependencies = ../../tools/funcphys.f90,../../hooks/machine.F,samfaerosols.F,../progsigma_calc.f90
+  dependencies = ../../tools/funcphys.f90,../../hooks/machine.F,samfaerosols.F,../progsigma_calc.f90,../progomega_calc.f90
 
 ########################################################################
 [ccpp-arg-table]
@@ -55,6 +55,13 @@
   dimensions = ()
   type = integer
   intent = in
+[nn]
+  standard_name = number_of_tracers_for_convective_transport
+  long_name = number of tracers for convective transport
+  units = count
+  dimensions = ()
+  type = integer
+  intent = in
 [first_time_step]
   standard_name = flag_for_first_timestep
   long_name = flag for first time step for time integration loop (cold/warmstart)
@@ -71,7 +78,7 @@
   intent = in
 [tmf]
   standard_name = tendency_of_vertically_diffused_tracer_concentration
-  long_name = updated tendency of the tracers due to vertical diffusion in PBL scheme
+  long_name = tendency of the tracers due to vertical diffusion in PBL scheme
   units = kg kg-1 s-1
   dimensions = (horizontal_loop_extent,vertical_layer_dimension,number_of_vertical_diffusion_tracers)
   type = real
@@ -188,6 +195,14 @@
   type = real
   kind = kind_phys
   intent = in
+[cscale]
+  standard_name = multiplicative_tuning_parameter_for_convective_cloud_water
+  long_name = multiplicative tuning parameter for convective cloud_water
+  units = none
+  dimensions = ()
+  type = real
+  kind = kind_phys
+  intent = in
 [delt]
   standard_name = timestep_for_physics
   long_name = physics time step
@@ -242,6 +257,14 @@
   type = real
   kind = kind_phys
   intent = in
+[tkeh]
+  standard_name = vertical_turbulent_kinetic_energy_at_interface
+  long_name = vertical turbulent kinetic energy at model layer interfaces
+  units = m2 s-2
+  dimensions = (horizontal_loop_extent,vertical_interface_dimension)
+  type = real
+  kind = kind_phys
+  intent = inout
 [qtr]
   standard_name = convective_transportable_tracers
   long_name = array to contain cloud water and other convective trans. tracers
@@ -249,7 +272,15 @@
   dimensions = (horizontal_loop_extent,vertical_layer_dimension,number_of_tracers_for_convective_transport)
   type = real
   kind = kind_phys
-  intent = inout
+  intent = in
+[dqtr]
+  standard_name = tendency_of_convective_transportable_tracers
+  long_name = array to contain tendencies of cloud water and other convective trans. tracers
+  units = kg kg-1 s-1
+  dimensions = (horizontal_loop_extent,vertical_layer_dimension,number_of_tracers_for_convective_transport)
+  type = real
+  kind = kind_phys
+  intent = out
 [prevsq]
   standard_name = specific_humidity_on_previous_timestep
   long_name = specific_humidity_on_previous_timestep
@@ -260,7 +291,7 @@
   intent = in
   optional = True
 [q]
-  standard_name = specific_humidity
+  standard_name = physics_timestep_initial_specific_humidity
   long_name = water vapor specific humidity
   units = kg kg-1
   dimensions = (horizontal_loop_extent,vertical_layer_dimension)
@@ -268,37 +299,69 @@
   kind = kind_phys
   intent = in
 [q1]
-  standard_name = specific_humidity_of_new_state
-  long_name = updated vapor specific humidity
+  standard_name = specific_humidity
+  long_name = vapor specific humidity
   units = kg kg-1
   dimensions = (horizontal_loop_extent,vertical_layer_dimension)
   type = real
   kind = kind_phys
-  intent = inout
+  intent = in
 [t1]
-  standard_name = air_temperature_of_new_state
-  long_name = updated temperature
+  standard_name = air_temperature
+  long_name = air temperature
   units = K
   dimensions = (horizontal_loop_extent,vertical_layer_dimension)
   type = real
   kind = kind_phys
-  intent = inout
+  intent = in
 [u1]
-  standard_name = x_wind_of_new_state
-  long_name = updated x-direction wind
+  standard_name = x_wind
+  long_name = x-direction wind
   units = m s-1
   dimensions = (horizontal_loop_extent,vertical_layer_dimension)
   type = real
   kind = kind_phys
-  intent = inout
+  intent = in
 [v1]
-  standard_name = y_wind_of_new_state
-  long_name = updated y-direction wind
+  standard_name = y_wind
+  long_name = y-direction wind
   units = m s-1
   dimensions = (horizontal_loop_extent,vertical_layer_dimension)
   type = real
   kind = kind_phys
-  intent = inout
+  intent = in
+[ten_t]
+  standard_name = tendency_of_air_temperature
+  long_name = tendency of air temperature calculated by one physics scheme
+  units = K s-1
+  dimensions = (horizontal_loop_extent,vertical_layer_dimension)
+  type = real
+  kind = kind_phys
+  intent = out
+[ten_u]
+  standard_name = tendency_of_x_wind
+  long_name = tendency of x wind calculated by one physics scheme
+  units = m s-2
+  dimensions = (horizontal_loop_extent,vertical_layer_dimension)
+  type = real
+  kind = kind_phys
+  intent = out
+[ten_v]
+  standard_name = tendency_of_y_wind
+  long_name = tendency of y wind calculated by one physics scheme
+  units = m s-2
+  dimensions = (horizontal_loop_extent,vertical_layer_dimension)
+  type = real
+  kind = kind_phys
+  intent = out
+[ten_q]
+  standard_name = tendency_of_tracer_concentration
+  long_name = tendency of tracer concentration calculated by one physics scheme
+  units = kg kg-1 s-1
+  dimensions = (horizontal_loop_extent,vertical_layer_dimension,number_of_tracers)
+  type = real
+  kind = kind_phys
+  intent = out
 [fscav]
   standard_name = chemical_tracer_scavenging_fractions
   long_name = array of aerosol scavenging coefficients
@@ -317,6 +380,13 @@
 [progsigma]
   standard_name = do_prognostic_updraft_area_fraction
   long_name = flag for prognostic sigma in cumuls scheme
+  units = flag
+  dimensions = ()
+  type = logical
+  intent = in
+[progomega]
+  standard_name = do_prognostic_updraft_velocity
+  long_name = flag for prognostic omega in cumuls scheme
   units = flag
   dimensions = ()
   type = logical
@@ -404,7 +474,6 @@
   type = real
   kind = kind_phys
   intent = out
-  optional = True
 [dd_mf]
   standard_name = instantaneous_atmosphere_downdraft_convective_mass_flux
   long_name = (downdraft mass flux) * delt
@@ -438,7 +507,7 @@
   kind = kind_phys
   intent = inout
 [sigmain]
-  standard_name = prognostic_updraft_area_fraction_in_convection
+  standard_name = physics_timestep_initial_updraft_area_fraction
   long_name = convective updraft area fraction
   units = frac
   dimensions = (horizontal_loop_extent,vertical_layer_dimension)
@@ -447,13 +516,31 @@
   intent = in
   optional = True
 [sigmaout]
-  standard_name = updraft_area_fraction_updated_by_physics
-  long_name = convective updraft area fraction updated by physics
+  standard_name = updraft_area_fraction
+  long_name = convective updraft area fraction
   units = frac
   dimensions = (horizontal_loop_extent,vertical_layer_dimension)
   type = real
   kind = kind_phys
-  intent = out
+  intent = inout
+  optional = True
+[omegain]
+  standard_name = physics_timestep_initial_updraft_velocity
+  long_name = convective updraft velocity
+  units = Pa s-1
+  dimensions = (horizontal_loop_extent,vertical_layer_dimension)
+  type = real
+  kind = kind_phys
+  intent = in
+  optional = True
+[omegaout]
+  standard_name = updraft_velocity
+  long_name = convective updraft velocity updated by physics
+  units = Pa s-1
+  dimensions = (horizontal_loop_extent,vertical_layer_dimension)
+  type = real
+  kind = kind_phys
+  intent = inout
   optional = True
 [betascu]
   standard_name = tuning_param_for_shallow_cu
@@ -493,6 +580,13 @@
   units = flag 
   dimensions = ()
   type = logical
+  intent = in
+[sigmab_coldstart]
+  standard_name = flag_to_cold_start_for_sigmab_init
+  long_name = flag to cold start for sigmab initialization
+  units = flag
+  dimensions = ()
+  type = logical 
   intent = in
 [qlcn]
   standard_name = mass_fraction_of_convective_cloud_liquid_water
@@ -715,6 +809,14 @@
   type = real
   kind = kind_phys
   intent = out
+[cat_adj_deep]
+  standard_name = adjustment_for_convective_advection_time_for_deep
+  long_name = adjustment for convective advection time for deep
+  units = none
+  dimensions = ()
+  type = real
+  kind = kind_phys
+  intent = in
 [errmsg]
   standard_name = ccpp_error_message
   long_name = error message for error handling in CCPP

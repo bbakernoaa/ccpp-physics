@@ -143,7 +143,7 @@ contains
                                 !! betwee -1 and +1
               ,do_capsuppress,cap_suppress_j    &    !         
               ,k22                              &    !
-              ,jmin,kdt,tropics)                         !
+              ,jmin,kdt,mc_thresh)                         !
 
    implicit none
 
@@ -182,16 +182,16 @@ contains
 !$acc declare copy(cnvwt,outu,outv,outt,outq,outqc,cupclw,frh_out,pre,xmb_out)
      real(kind=kind_phys),    dimension (its:ite)                      &
         ,intent (in  )                   ::                            &
-        hfx,qfx,xmbm_in,xmbs_in
-!$acc declare copyin(hfx,qfx,xmbm_in,xmbs_in)
+        mc_thresh,hfx,qfx,xmbm_in,xmbs_in
+!$acc declare copyin(mc_thresh,hfx,qfx,xmbm_in,xmbs_in)
      integer,    dimension (its:ite)                                   &
         ,intent (inout  )                ::                            &
         kbcon,ktop
 !$acc declare copy(kbcon,ktop)
      integer,    dimension (its:ite)                                   &
         ,intent (in  )                   ::                            &
-        kpbl,tropics
-!$acc declare copyin(kpbl,tropics)
+        kpbl
+!$acc declare copyin(kpbl)
   !
   ! basic environmental input includes moisture convergence (mconv)
   ! omega (omeg), windspeed (us,vs), and a flag (ierr) to turn off
@@ -426,9 +426,9 @@ contains
      integer :: turn,pmin_lev(its:ite),start_level(its:ite),ktopkeep(its:ite)
      real(kind=kind_phys),    dimension (its:ite,kts:kte) :: dtempdz
      integer, dimension (its:ite,kts:kte) ::  k_inv_layers 
-     real(kind=kind_phys),    dimension (its:ite) :: c0    ! HCB
+     real(kind=kind_phys),    dimension (its:ite) :: c0, rrfs_factor  ! HCB
      real(kind=kind_phys),    dimension (its:ite,kts:kte) :: c0t3d    ! hli for smoke/dust wet scavenging
-!$acc declare create(pmin_lev,start_level,ktopkeep,dtempdz,k_inv_layers,c0,c0t3d)
+!$acc declare create(pmin_lev,start_level,ktopkeep,dtempdz,k_inv_layers,c0,rrfs_factor,c0t3d)
  
 ! rainevap from sas
      real(kind=kind_phys) zuh2(40)
@@ -487,6 +487,7 @@ contains
 ! Set cloud water to rain water conversion rate (c0)
 !$acc kernels
       c0(:)=0.004
+      rrfs_factor(:)=1.
       do i=its,itf
          xland1(i)=int(xland(i)+.0001) ! 1.
          if(xland(i).gt.1.5 .or. xland(i).lt.0.5)then
@@ -496,6 +497,7 @@ contains
          if(imid.eq.1)then
            c0(i)=0.002
          endif
+!         if(kdt.le.(4500./dtime))rrfs_factor(i)=1.-(float(kdt)/(4500./dtime)-1.)**2
       enddo
 !$acc end kernels
 
@@ -572,15 +574,15 @@ contains
 !
 !$acc kernels
       start_level(:)=kte
+      frh_out(:) = 0.
 !$acc end kernels
 
 !$acc kernels
 !$acc loop private(radius,frh)
       do i=its,ite
          c1d(i,:)= 0. !c1 ! 0. ! c1 ! max(.003,c1+float(csum(i))*.0001)
-         entr_rate(i)=7.e-5 - min(20.,float(csum(i))) * 3.e-6
-         if(xland1(i) == 0)entr_rate(i)=7.e-5
-         if(dx(i)<dx_thresh) entr_rate(i)=2.e-4
+         !entr_rate(i)=7.e-5  !- min(20.,float(csum(i))) * 3.e-6
+         entr_rate(i)=1.e-4
          if(imid.eq.1)entr_rate(i)=3.e-4
          radius=.2/entr_rate(i)
          frh=min(1.,3.14*radius*radius/dx(i)/dx(i))
@@ -592,8 +594,7 @@ contains
          sig(i)=(1.-frh)**2
          !frh_out(i) = frh
          if(forcing(i,7).eq.0.)sig(i)=1.
-         if(kdt.le.(3600./dtime))sig(i)=1.
-         frh_out(i) = frh*sig(i)
+         frh_out(i) = frh !*sig(i)
       enddo
 !$acc end kernels
       sig_thresh = (1.-frh_thresh)**2
@@ -638,7 +639,7 @@ contains
 !
       depth_min=3000.
 !---  for RRFS allow only very deep convection
-      if(dx(its)<dx_thresh)depth_min=5000.
+      !if(dx(its)<dx_thresh)depth_min=5000.
       if(imid.eq.1)depth_min=2500.
 !
 !--- maximum depth (mb) of capping 
@@ -729,20 +730,18 @@ contains
         do k=kts,ktf
           if(zo_cup(i,k).gt.zkbmax+z1(i))then
             kbmax(i)=k
-            go to 25
+            exit
           endif
         enddo
- 25     continue
 !
 !> - Compute the level where detrainment for downdraft starts (\p kdet)
 !
         do k=kts,ktf
           if(zo_cup(i,k).gt.z_detr+z1(i))then
             kdet(i)=k
-            go to 26
+            exit
           endif
         enddo
- 26     continue
 !
         endif
       enddo
@@ -998,7 +997,7 @@ contains
 !$acc end parallel
 
 !$acc kernels
-      do 37 i=its,itf
+      do i=its,itf
          kzdown(i)=0
          if(ierr(i).eq.0)then
             zktop=(zo_cup(i,ktop(i))-z1(i))*.6
@@ -1009,11 +1008,11 @@ contains
               if(zo_cup(i,k).gt.zktop)then
                  kzdown(i)=k
                  kzdown(i)=min(kzdown(i),kstabi(i)-1)  !
-                 go to 37
+                 exit
               endif
               enddo
          endif
- 37   continue
+       end do
 !$acc end kernels
 
 !
@@ -1968,6 +1967,7 @@ contains
 !$acc atomic update
           mconv(i)=mconv(i)+omeg(i,k)*dq/g
         enddo
+        if ( mconv(i) < mc_thresh(i)) ierr(i)=2242
       enddo
 !$acc end kernels
       call cup_forcing_ens_3d(closure_n,xland1,aa0,aa1,xaa0_ens,mbdt,dtime, &
@@ -2030,7 +2030,7 @@ contains
             zuo,pre,pwo_ens,xmb,ktop,                                    &
             edto,pwdo,'deep',ierr2,ierr3,                                &
             po_cup,pr_ens,maxens3,                                       &
-            sig,closure_n,xland1,xmbm_in,xmbs_in,                        &
+            sig,closure_n,xland1,xmbm_in,xmbs_in,rrfs_factor,            &
             ichoice,imid,ipr,itf,ktf,                                    &
             its,ite, kts,kte,                                            &
             dicycle,xf_dicycle )
@@ -2706,8 +2706,8 @@ contains
         edtc(i,1)=0.
        enddo
        do kk = kts,ktf-1
-         do 62 i=its,itf
-          if(ierr(i).ne.0)go to 62
+         do i=its,itf
+          if(ierr(i).ne.0) cycle
           if (kk .le. min0(ktop(i),ktf) .and. kk .ge. kbcon(i)) then
              vws(i) = vws(i)+                                        &
               (abs((us(i,kk+1)-us(i,kk))/(z(i,kk+1)-z(i,kk)))        &
@@ -2716,7 +2716,7 @@ contains
             sdp(i) = sdp(i) + p(i,kk) - p(i,kk+1)
           endif
           if (kk .eq. ktf-1)vshear(i) = 1.e3 * vws(i) / sdp(i)
-   62   continue
+         end do
        end do
       do i=its,itf
          if(ierr(i).eq.0)then
@@ -3644,13 +3644,13 @@ endif
 !$acc end kernels
 
 !$acc parallel loop
-       do 27 i=its,itf
+      i_loop: do i=its,itf
       kbcon(i)=1
 !
 ! reset iloop for mid level convection
       if(cap_max(i).gt.200 .and. imid.eq.1)iloop(i)=5
 !
-      if(ierr(i).ne.0)go to 27
+      if(ierr(i).ne.0) cycle i_loop
       start_level(i)=k22(i)
       kbcon(i)=k22(i)+1
       if(iloop(i).eq.5)kbcon(i)=k22(i)
@@ -3666,28 +3666,26 @@ endif
         enddo
        !==
 
-      go to 32
- 31   continue
-      kbcon(i)=kbcon(i)+1
-      if(kbcon(i).gt.kbmax(i)+2)then
-         if(iloop(i).ne.4)then
+      find_kbcon: do
+        hetest = hcot(i,kbcon(i)) !hkb(i) ! he_cup(i,k22(i))
+        if(hetest.lt.hes_cup(i,kbcon(i))) then
+          kbcon(i)=kbcon(i)+1
+          if(kbcon(i).gt.kbmax(i)+2)then
+          if(iloop(i).ne.4)then
                 ierr(i)=3
 #ifndef _OPENACC
                 ierrc(i)="could not find reasonable kbcon in cup_kbcon"
 #endif
          endif
-        go to 27
-      endif
- 32   continue
-      hetest=hcot(i,kbcon(i)) !hkb(i) ! he_cup(i,k22(i))
-      if(hetest.lt.hes_cup(i,kbcon(i)))then
-        go to 31
+        cycle i_loop
+        endif
+        cycle find_kbcon
       endif
 
 !     cloud base pressure and max moist static energy pressure
 !     i.e., the depth (in mb) of the layer of negative buoyancy
-      if(kbcon(i)-k22(i).eq.1)go to 27
-      if(iloop(i).eq.5 .and. (kbcon(i)-k22(i)).le.2)go to 27
+      if(kbcon(i)-k22(i).eq.1) cycle i_loop
+      if(iloop(i).eq.5 .and. (kbcon(i)-k22(i)).le.2) cycle i_loop
       pbcdif=-p_cup(i,kbcon(i))+p_cup(i,k22(i))
       plus=max(25.,cap_max(i)-float(iloop(i)-1)*cap_inc(i))
       if(iloop(i).eq.4)plus=cap_max(i)
@@ -3696,7 +3694,7 @@ endif
       if(iloop(i).eq.5)plus=150.
         if(iloop(i).eq.5.and.cap_max(i).gt.200)pbcdif=-p_cup(i,kbcon(i))+cap_max(i)
       if(pbcdif.le.plus)then
-        go to 27
+        cycle i_loop
       elseif(pbcdif.gt.plus)then
         k22(i)=k22(i)+1
         kbcon(i)=k22(i)+1
@@ -3725,12 +3723,13 @@ endif
                 ierrc(i)="could not find reasonable kbcon in cup_kbcon"
 #endif
             endif
-            go to 27
+            cycle i_loop
         endif
-        go to 32
+        cycle find_kbcon
       endif
- 27   continue
  !$acc end parallel
+      end do find_kbcon
+      end do i_loop
 
    end subroutine cup_kbcon
 
@@ -3958,7 +3957,7 @@ endif
         ,intent (in  )                   ::                                   &
         dt
      real(kind=kind_phys) :: names,scalef,thresh,qmem,qmemf,qmem2,qtest,qmem1
-     integer :: icheck
+     integer :: i,k,icheck
 !
 ! first do check on vertical heating rate
 !
@@ -4057,7 +4056,7 @@ endif
               zu,pre,pw,xmb,ktop,                                           &
               edt,pwd,name,ierr2,ierr3,p_cup,pr_ens,                        &
               maxens3,                                                      &
-              sig,closure_n,xland1,xmbm_in,xmbs_in,                         &
+              sig,closure_n,xland1,xmbm_in,xmbs_in,rrfs_factor,             &
               ichoice,imid,ipr,itf,ktf,                                     &
               its,ite, kts,kte,                                             &
               dicycle,xf_dicycle )
@@ -4119,7 +4118,7 @@ endif
         ,intent (inout)                   ::                           &
         ierr,ierr2,ierr3
      integer, intent(in) :: dicycle
-     real(kind=kind_phys),    intent(in), dimension (its:ite) :: xf_dicycle
+     real(kind=kind_phys),    intent(in), dimension (its:ite) :: xf_dicycle, rrfs_factor
 !$acc declare copyin(zu,pwd,p_cup,sig,xmbm_in,xmbs_in,edt,xff_mid,dellat,dellaqc,dellaq,pw,ktop,xland1,xf_dicycle)
 !$acc declare copy(xf_ens,pr_ens,outtem,outq,outqc,pre,xmb,closure_n,ierr,ierr2,ierr3)
 !
@@ -4199,6 +4198,7 @@ endif
          clos_wei=16./max(1.,closure_n(i))
          xmb_ave(i)=min(xmb_ave(i),100.)
          xmb(i)=clos_wei*sig(i)*xmb_ave(i)
+         !if(dx(i)<dx_thresh) xmb(i)=rrfs_factor(i)*xmb(i)
 
            if(xmb(i) < 1.e-16)then
               ierr(i)=19
@@ -4259,49 +4259,10 @@ endif
           endif
        enddo
 !$acc end kernels
- return
-
-!$acc kernels
-      do i=its,itf
-        pwtot(i)=0.
-        pre2(i)=0.
-        if(ierr(i).eq.0)then
-            do k=kts,ktop(i)
-              pwtot(i)=pwtot(i)+pw(i,k,1)
-            enddo
-            do k=kts,ktop(i)
-            dp=100.*(p_cup(i,k)-p_cup(i,k+1))/g
-            dtt =dellat  (i,k,1)
-            dtq =dellaq  (i,k,1)
-! necessary to drive downdraft
-            dtpwd=-pwd(i,k)*edt(i)
-! take from dellaqc first
-            dtqc=dellaqc (i,k,1)*dp - dtpwd
-! if this is negative, use dellaqc first, rest needs to come from rain
-           if(dtqc < 0.)then
-             dtpwd=dtpwd-dellaqc(i,k,1)*dp
-             dtqc=0.
-! if this is positive, can come from clw detrainment
-           else
-             dtqc=dtqc/dp
-             dtpwd=0.
-           endif
-           outtem(i,k)= xmb(i)* dtt
-           outq  (i,k)= xmb(i)* dtq
-           outqc (i,k)= xmb(i)* dtqc
-           xf_ens(i,:)=sig(i)*xf_ens(i,:)
-! what is evaporated
-           pre(i)=pre(i)-xmb(i)*dtpwd
-           pre2(i)=pre2(i)+xmb(i)*(pw(i,k,1)+edt(i)*pwd(i,k))
-!           write(15,124)k,dellaqc(i,k,1),dtqc,-pwd(i,k)*edt(i),dtpwd
-          enddo
-          pre(i)=-pre(i)+xmb(i)*pwtot(i)
-        endif
 #ifndef _OPENACC
 124     format(1x,i3,4e13.4)
 125     format(1x,2e13.4)
 #endif
-      enddo
 !$acc end kernels
 
    end subroutine cup_output_ens_3d
@@ -4812,16 +4773,15 @@ endif
         ktopdby(i)=maxloc(dby(:),1)
         kklev=maxloc(dbm(:),1)
 !$acc loop seq
+        kfinalzu=ktf-2
+        ktop(i)=kfinalzu
         do k=maxloc(dby(:),1)+1,ktf-2
           if(dby(k).lt.dbythresh*maxval(dby))then
               kfinalzu=k  - 1
               ktop(i)=kfinalzu
-              go to 412
+              exit
           endif
         enddo
-        kfinalzu=ktf-2
-        ktop(i)=kfinalzu
-412     continue
         ktop(i)=ktopdby(i) ! HCB
         kklev=min(kklev+3,ktop(i)-2)
 !
@@ -5532,7 +5492,7 @@ endif
                                    ,itf,ktf,its,ite, kts,kte, cumulus          )
      implicit none
      character *(*), intent (in)                          :: cumulus
-     integer  ,intent (in   )	                          :: itf,ktf, its,ite, kts,kte
+     integer  ,intent (in   )                             :: itf,ktf, its,ite, kts,kte
      real(kind=kind_phys),     intent (in   ), dimension(its:ite,kts:kte) :: tn,po_cup
      real(kind=kind_phys),     intent (inout), dimension(its:ite,kts:kte) :: p_liq_ice,melting_layer
 !$acc declare copyin(tn,po_cup) copy(p_liq_ice,melting_layer)
@@ -5769,10 +5729,9 @@ endif
               kfinalzu = k - 1
               ktop(i)  = kfinalzu
               !print*,'hco4=',k,kfinalzu,ktop(i),kbcon(i)+1;call flush(6)
-              go to 412
+              exit
           endif
         enddo
-        412    continue
        else
          do k=start_level(i)+1,ktf-2
           !~ print*,'hco31=',k,dby(k),dbythresh*maxval(dby)

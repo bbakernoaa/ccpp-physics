@@ -1,4 +1,14 @@
 [submodule "physics/Radiation/RRTMGP/rte-rrtmgp"]
   path = physics/Radiation/RRTMGP/rte-rrtmgp
-  url = https://github.com/earth-system-radiation/rte-rrtmgp
+  url = https://github.com/NCAR/rte-rrtmgp
   branch = main
+[submodule "physics/MP/TEMPO/TEMPO"]
+  path = physics/MP/TEMPO/TEMPO
+  url = https://github.com/NCAR/TEMPO
+  branch = main
+[submodule "physics/SFC_Layer/MYNN/MYNN"]
+  path = physics/SFC_Layer/MYNN/MYNN
+  #url = https://github.com/NCAR/MYNN-SFC
+  #branch = main
+  url = https://github.com/grantfirl/MYNN-SFC
+  branch = feature/tendency_cleanup

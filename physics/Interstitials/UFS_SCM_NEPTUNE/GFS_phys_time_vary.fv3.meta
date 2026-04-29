@@ -1,15 +1,14 @@
 [ccpp-table-properties]
   name = GFS_phys_time_vary
   type = scheme
-  relative_path = ../../
+  dependencies_path = ../../
   dependencies = hooks/machine.F
   dependencies = Interstitials/UFS_SCM_NEPTUNE/gcycle.F90,Interstitials/UFS_SCM_NEPTUNE/iccn_def.F
   dependencies = Interstitials/UFS_SCM_NEPTUNE/iccninterp.F90,Interstitials/UFS_SCM_NEPTUNE/sfcsub.F
   dependencies = Radiation/mersenne_twister.f
   dependencies = MP/Morrison_Gettelman/aerclm_def.F,MP/Morrison_Gettelman/aerinterp.F90
   dependencies = SFC_Models/Land/Noah/namelist_soilveg.f,SFC_Models/Land/Noah/set_soilveg.f,SFC_Models/Land/Noahmp/noahmp_tables.f90
-  dependencies = photochem/module_ozphys.F90
-  dependencies = photochem/h2o_def.f,photochem/h2ointerp.f90
+  dependencies = photochem/module_ozphys.F90,photochem/module_h2ophys.F90
   dependencies = GWD/cires_tauamf_data.F90
 
 ########################################################################
@@ -1036,6 +1035,20 @@
   dimensions = ()
   type = ty_ozphys
   intent = in
+[h2ophys]
+  standard_name = dataset_for_h2o_photochemistry_physics
+  long_name = dataset for NRL h2o photochemistry physics
+  units = mixed
+  dimensions = ()
+  type = ty_h2ophys
+  intent = in
+[is_initialized]
+  standard_name = flag_for_gfs_phys_time_vary_interstitial_initialization
+  long_name = flag carrying interstitial initialization status
+  units = flag
+  dimensions = ()
+  type = logical
+  intent = inout
 [errmsg]
   standard_name = ccpp_error_message
   long_name = error message for error handling in CCPP
@@ -1056,6 +1069,13 @@
 [ccpp-arg-table]
   name = GFS_phys_time_vary_finalize
   type = scheme
+[is_initialized]
+  standard_name = flag_for_gfs_phys_time_vary_interstitial_initialization
+  long_name = flag carrying interstitial initialization status
+  units = flag
+  dimensions = ()
+  type = logical
+  intent = inout
 [errmsg]
   standard_name = ccpp_error_message
   long_name = error message for error handling in CCPP
@@ -1153,6 +1173,13 @@
   dimensions = (4)
   type = integer
   intent = in
+[cplflx]
+  standard_name = flag_for_surface_flux_coupling
+  long_name = flag controlling cplflx collection (default off)
+  units = flag
+  dimensions = ()
+  type = logical
+  intent = in
 [nsswr]
   standard_name = number_of_timesteps_between_shortwave_radiation_calls
   long_name = number of timesteps between shortwave radiation calls
@@ -1231,6 +1258,13 @@
   units = flag
   dimensions = ()
   type = logical
+  intent = in
+[iaermdl]
+  standard_name = control_for_aerosol_radiation_scheme
+  long_name = control of aerosol scheme in radiation
+  units = 1
+  dimensions = ()
+  type = integer
   intent = in
 [iccn]
   standard_name = control_for_ice_cloud_condensation_nuclei_forcing
@@ -1615,6 +1649,14 @@
   long_name = forecast time at the previous timestep
   units = h
   dimensions = ()
+  type = real
+  kind = kind_phys
+  intent = in
+[oceanfrac]
+  standard_name = sea_area_fraction
+  long_name = fraction of horizontal grid area occupied by ocean
+  units = frac
+  dimensions = (horizontal_dimension)
   type = real
   kind = kind_phys
   intent = in
@@ -2042,26 +2084,20 @@
   dimensions = ()
   type = ty_ozphys
   intent = in
-[errmsg]
-  standard_name = ccpp_error_message
-  long_name = error message for error handling in CCPP
-  units = none
+[h2ophys]
+  standard_name = dataset_for_h2o_photochemistry_physics
+  long_name = dataset for NRL h2o photochemistry physics
+  units = mixed
   dimensions = ()
-  type = character
-  kind = len=*
-  intent = out
-[errflg]
-  standard_name = ccpp_error_code
-  long_name = error code for error handling in CCPP
-  units = 1
+  type = ty_h2ophys
+  intent = in
+[is_initialized]
+  standard_name = flag_for_gfs_phys_time_vary_interstitial_initialization
+  long_name = flag carrying interstitial initialization status
+  units = flag
   dimensions = ()
-  type = integer
-  intent = out
-
-########################################################################
-[ccpp-arg-table]
-  name = GFS_phys_time_vary_timestep_finalize
-  type = scheme
+  type = logical
+  intent = in
 [errmsg]
   standard_name = ccpp_error_message
   long_name = error message for error handling in CCPP

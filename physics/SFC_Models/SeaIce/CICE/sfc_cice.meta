@@ -1,7 +1,7 @@
 [ccpp-table-properties]
   name = sfc_cice
   type = scheme
-  relative_path	= ../../../
+  dependencies_path	= ../../../
   dependencies = hooks/machine.F
 
 ########################################################################
@@ -55,7 +55,7 @@
   kind = kind_phys
   intent = in
 [t1]
-  standard_name = air_temperature_at_surface_adjacent_layer
+  standard_name = physics_timestep_initial_air_temperature_at_surface_adjacent_layer
   long_name = surface layer mean temperature
   units = K
   dimensions = (horizontal_loop_extent)
@@ -63,7 +63,7 @@
   kind = kind_phys
   intent = in
 [q1]
-  standard_name = specific_humidity_at_surface_adjacent_layer
+  standard_name = physics_timestep_initial_specific_humidity_at_surface_adjacent_layer
   long_name = surface layer mean specific humidity
   units = kg kg-1
   dimensions = (horizontal_loop_extent)
@@ -124,7 +124,6 @@
   type = real
   kind = kind_phys
   intent = in
-  optional = True
 [dtsfc]
   standard_name = surface_upward_sensible_heat_flux_from_coupled_process
   long_name = sfc sensible heat flux for coupling
@@ -133,7 +132,6 @@
   type = real
   kind = kind_phys
   intent = in
-  optional = True
 [dusfc]
   standard_name = surface_x_momentum_flux_from_coupled_process
   long_name = sfc x momentum flux for coupling
@@ -142,7 +140,6 @@
   type = real
   kind = kind_phys
   intent = in
-  optional = True
 [dvsfc]
   standard_name = surface_y_momentum_flux_from_coupled_process
   long_name = sfc y momentum flux for coupling
@@ -151,7 +148,6 @@
   type = real
   kind = kind_phys
   intent = in
-  optional = True
 [snowd]
   standard_name = lwe_surface_snow_from_coupled_process
   long_name = sfc snow depth in meters over sea ice for coupling

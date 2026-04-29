@@ -10,7 +10,6 @@
 !ugwp-v0 subroutines: GWDPS_V0 and fv3_ugwp_solv2_v0	
 !
 !=====================================================================
-!>\ingroup cires_ugwp_run_mod
 !>\defgroup ugwp_driverv0_mod UGWP V0 Driver Module
 !! This is the CIRES UGWP V0 driver module
 !!
@@ -349,7 +348,9 @@
           BVF2 = grav2 * RDZ * (VTK(I,K+1)-VTK(I,K))
      &                       / (VTK(I,K+1)+VTK(I,K))
           bnv2(i,k+1) = max( BVF2, bnv2min )
-          RI_N(I,K+1) = Bnv2(i,k)/SHR2        ! Richardson number consistent with BNV2
+          ! https://github.com/NCAR/ccpp-physics/issues/1103
+          !RI_N(I,K+1) = Bnv2(i,k)/SHR2        ! Richardson number consistent with BNV2
+          RI_N(I,K+1) = Bnv2(i,max(k,2))/SHR2        ! Richardson number consistent with BNV2
 !
 ! add here computation for Ktur and OGW-dissipation fro VE-GFS
 !
@@ -430,28 +431,26 @@
 ! Alternative expression: ZMTB = max(Heff*(1. -Fcrit_gfs/Fr), 0)
 ! fcrit_gfs/fr	 
 !
-        goto 788
 
-        BNV     = SQRT( BNV2bar(I) )
-        heff    = 2.*min(HPRIME(J),hpmax)
-        zw2     = UBAR(I)*UBAR(I)+VBAR(I)*VBAR(I)
-        Ulow(i) = sqrt(max(zw2,dw2min))
-        Fr      = heff*bnv/Ulow(i)
-        ZW1     = max(Heff*(1. -fcrit_gfs/fr), 0.0)
-        zw2     = phil(j,2)*rgrav
-        if (Fr > fcrit_gfs .and. zw1 > zw2 ) then 
-          do k=2, kmm1
-            pkp1log =  phil(j,k+1) * rgrav
-            pklog   =  phil(j,k)   * rgrav
-            if (zw1 <= pkp1log .and. zw1 >= pklog)  exit
-          enddo
-            IDXZB(I) = K
-            zmtb (J) = PHIL(J, K)*rgrav
-        else
-           zmtb (J) = 0.
-           IDXZB(I) = 0
-        endif
-788     continue
+!        BNV     = SQRT( BNV2bar(I) )
+!        heff    = 2.*min(HPRIME(J),hpmax)
+!        zw2     = UBAR(I)*UBAR(I)+VBAR(I)*VBAR(I)
+!        Ulow(i) = sqrt(max(zw2,dw2min))
+!        Fr      = heff*bnv/Ulow(i)
+!        ZW1     = max(Heff*(1. -fcrit_gfs/fr), 0.0)
+!        zw2     = phil(j,2)*rgrav
+!        if (Fr > fcrit_gfs .and. zw1 > zw2 ) then 
+!          do k=2, kmm1
+!            pkp1log =  phil(j,k+1) * rgrav
+!            pklog   =  phil(j,k)   * rgrav
+!            if (zw1 <= pkp1log .and. zw1 >= pklog)  exit
+!          enddo
+!            IDXZB(I) = K
+!            zmtb (J) = PHIL(J, K)*rgrav
+!        else
+!           zmtb (J) = 0.
+!           IDXZB(I) = 0
+!        endif
       ENDDO
 
 !
@@ -815,7 +814,7 @@
       IF( do_tofd ) then
         axtms(:,:) = 0.0 ; aytms(:,:) = 0.0
 
-	
+
         DO I = 1,npt
           J = ipt(i)
           zpbl  =rgrav*phil( j, kpbl(j) )
@@ -922,8 +921,7 @@
 !===============================================================================
 !23456==============================================================================
 
-!>\ingroup cires_ugwp_run_mod
-!! A modification of the Scinocca (2003) \cite scinocca_2003 algorithm for 
+!> A modification of the Scinocca (2003) \cite scinocca_2003 algorithm for 
 !! NGWs with non-hydrostatic and rotational
 !!effects for GW propagations and background dissipation 
       subroutine fv3_ugwp_solv2_v0(klon, klev, dtime,

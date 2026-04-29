@@ -46,7 +46,7 @@ module fv_sat_adj
 !     <td>is_master</td>
 !   </tr>
 !   <tr>
-!     <td>gfdl_cloud_microphys_mod</td>
+!     <td>module_gfdl_param</td>
 !     <td>ql_gen, qi_gen, qi0_max, ql_mlt, ql0_max, qi_lim, qs_mlt,
 !         tau_r2g, tau_smlt, tau_i2s, tau_v2l, tau_l2v, tau_imlt, tau_l2r,
 !         rad_rain, rad_snow, rad_graupel, dw_ocean, dw_land, tintqs</td>
@@ -61,10 +61,11 @@ module fv_sat_adj
                          cp_air => con_cp_dyn
     ! *DH
     use machine,                  only: kind_grid, kind_dyn
-    use gfdl_cloud_microphys_mod, only: ql_gen, qi_gen, qi0_max, ql_mlt, ql0_max, qi_lim, qs_mlt
-    use gfdl_cloud_microphys_mod, only: icloud_f, sat_adj0, t_sub, cld_min
-    use gfdl_cloud_microphys_mod, only: tau_r2g, tau_smlt, tau_i2s, tau_v2l, tau_l2v, tau_imlt, tau_l2r
-    use gfdl_cloud_microphys_mod, only: rad_rain, rad_snow, rad_graupel, dw_ocean, dw_land, tintqs
+    use module_gfdlmp_param, only: ql_gen, qi_gen, qi0_max, ql_mlt, ql0_max, qi_lim, qs_mlt
+    use module_gfdlmp_param, only: icloud_f, sat_adj0, t_sub, cld_min
+    use module_gfdlmp_param, only: tau_r2g, tau_smlt, tau_i2s, tau_v2l, tau_l2v, tau_imlt, tau_l2r
+    use module_gfdlmp_param, only: rad_rain, rad_snow, rad_graupel, dw_ocean, dw_land, tintqs
+
 #ifdef MULTI_GASES
     use ccpp_multi_gases_mod, only: multi_gases_init,     &
                                     multi_gases_finalize, &
@@ -268,9 +269,9 @@ subroutine fv_sat_adj_run(mdt, zvir, is, ie, isd, ied, isc1, iec1, isc2, iec2, k
     ! If multi-gases physics are not used, ngas is one and qvi identical to qv
     integer,             intent(in)    :: ngas
 #ifdef MULTI_GASES
-    real(kind=kind_dyn), intent(inout), optional :: qvi(isd:ied, jsd:jed, 1:km, 1:ngas)
+    real(kind=kind_dyn), intent(inout) :: qvi(isd:ied, jsd:jed, 1:km, 1:ngas)
 #else
-    real(kind=kind_dyn), intent(inout), optional :: qvi(:,:,:,:)
+    real(kind=kind_dyn), intent(inout) :: qvi(:,:,:,:)
 #endif
     real(kind=kind_dyn), intent(inout) :: qv(isd:ied, jsd:jed, 1:km)
     real(kind=kind_dyn), intent(inout) :: ql(isd:ied, jsd:jed, 1:km)

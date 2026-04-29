@@ -11,7 +11,7 @@ module mp_thompson
       use machine, only : kind_phys
 
       use module_mp_thompson, only : thompson_init, mp_gt_driver, thompson_finalize, calc_effectRad
-      use module_mp_thompson, only : naIN0, naIN1, naCCN0, naCCN1, eps, Nt_c_l, Nt_c_o
+      use module_mp_thompson, only : naIN0, naIN1, naCCN0, naCCN1, eps
       use module_mp_thompson, only : re_qc_min, re_qc_max, re_qi_min, re_qi_max, re_qs_min, re_qs_max
 
       use module_mp_thompson_make_number_concentrations, only: make_IceNumber, make_DropletNumber, make_RainNumber
@@ -22,8 +22,6 @@ module mp_thompson
 
       private
 
-      logical :: is_initialized = .False.
-
       integer, parameter :: ext_ndiag3d = 37
 
    contains
@@ -32,7 +30,13 @@ module mp_thompson
 !! \section arg_table_mp_thompson_init Argument Table
 !! \htmlinclude mp_thompson_init.html
 !!
-      subroutine mp_thompson_init(ncol, nlev, con_g, con_rd, con_eps,      &
+      subroutine mp_thompson_init(ncol, nlev, con_pi, con_t0c, con_rv,     &
+                                  con_cp, con_rgas, con_boltz, con_amd,    &
+                                  con_amw, con_avgd, con_hvap, con_hfus,   &
+                                  con_g, con_rd, con_eps,                  &
+                                  con_Nt_c_l, con_Nt_c_o, con_av_i,        &
+                                  con_xnc_max, con_ssati_min, con_Nt_i_max,&
+                                  con_rr_min,                              &
                                   restart, imp_physics,                    &
                                   imp_physics_thompson, convert_dry_rho,   &
                                   spechum, qc, qr, qi, qs, qg, ni, nr,     &
@@ -41,15 +45,24 @@ module mp_thompson
                                   nwfa, nifa, tgrs, prsl, phil, area,      &
                                   aerfld, mpicomm, mpirank, mpiroot,       &
                                   threads, ext_diag, diag3d,               &
-                                  errmsg, errflg)
-
+                                  is_initialized, errmsg, errflg)
+         use module_mp_thompson, only : PI, T_0, Rv, R, RoverRv, Cp
+         use module_mp_thompson, only : R_uni, k_b, M_w, M_a, N_avo, lvap0, lfus
+         use module_mp_thompson, only : av_i, av_s, D0s, bv_s, bv_i
+         use module_mp_thompson, only : nt_c_l, nt_c_o, xnc_max, ssati_min, Nt_i_max, rr_min
+         
          implicit none
 
          ! Interface variables
          integer,                   intent(in   ) :: ncol
          integer,                   intent(in   ) :: nlev
-         real(kind_phys),           intent(in   ) :: con_g, con_rd, con_eps
+         real(kind_phys),           intent(in   ) :: con_pi, con_t0c, con_rv, con_cp, con_rgas, &
+                                                     con_boltz, con_amd, con_amw, con_avgd,     &
+                                                     con_hvap, con_hfus, con_g, con_rd, con_eps
+         real(kind_phys), optional, intent(in   ) :: con_Nt_c_l, con_Nt_c_o, con_av_i, con_xnc_max, &
+                                                     con_ssati_min, con_Nt_i_max, con_rr_min
          logical,                   intent(in   ) :: restart
+         logical,                   intent(inout) :: is_initialized
          integer,                   intent(in   ) :: imp_physics
          integer,                   intent(in   ) :: imp_physics_thompson
          ! Hydrometeors
@@ -105,6 +118,37 @@ module mp_thompson
 
          if (is_initialized) return
 
+         ! Set local Thompson MP module constants from host model
+         PI = con_pi
+         T_0 = con_t0c
+         Rv = con_Rv
+         R = con_rd
+         RoverRv = con_eps
+         Cp = con_cp
+         R_uni = con_rgas
+         k_b = con_boltz
+         M_w = con_amw*1.0E-3 !module_mp_thompson expects kg/mol
+         M_a = con_amd*1.0E-3 !module_mp_thompson expects kg/mol
+         N_avo = con_avgd
+         lvap0 = con_hvap
+         lfus = con_hfus
+         
+         if (present(con_nt_c_l)) nt_c_l = con_nt_c_l
+         if (present(con_nt_c_o)) nt_c_o = con_nt_c_o
+         if (present(con_av_i)) then
+           if (con_av_i > 0.) then
+             av_i = con_av_i
+           else
+             av_i = av_s * D0s ** (bv_s - bv_i) ! Transition value of coefficient matching at crossover from cloud ice to snow
+           end if
+         else
+           av_i = av_s * D0s ** (bv_s - bv_i) ! Transition value of coefficient matching at crossover from cloud ice to snow
+         end if
+         if (present(con_xnc_max)) xnc_max = con_xnc_max
+         if (present(con_ssati_min)) ssati_min = con_ssati_min
+         if (present(con_Nt_i_max)) Nt_i_max = con_Nt_i_max
+         if (present(con_rr_min)) rr_min = con_rr_min
+         
          ! Consistency checks
          if (imp_physics/=imp_physics_thompson) then
             write(errmsg,'(*(a))') "Logic error: namelist choice of microphysics is different from Thompson MP"
@@ -132,7 +176,7 @@ module mp_thompson
                             mpicomm=mpicomm, mpirank=mpirank, mpiroot=mpiroot, &
                             threads=threads, errmsg=errmsg, errflg=errflg)
          if (errflg /= 0) return
-
+         
          ! For restart runs, the init is done here
          if (restart) then
            is_initialized = .true.
@@ -339,12 +383,15 @@ module mp_thompson
                               spp_prt_list, spp_var_list,          &
                               spp_stddev_cutoff,                   &
                               cplchm, pfi_lsan, pfl_lsan,          &
-                              errmsg, errflg)
+                              is_initialized, fs_fac_rain, fs_fac_snow, &
+                              ten_q, dspechum, dqc, dqr,           &
+                              dqi, dqs, dqg, dni, dnr, dnc, dnwfa, &
+                              dnifa, dtgrs, ten_u, ten_v, errmsg, errflg)
 
          implicit none
 
          ! Interface variables
-
+         logical,                   intent(inout) :: is_initialized
          ! Dimensions and constants
          integer,                   intent(in   ) :: ncol
          integer,                   intent(in   ) :: nlev
@@ -353,26 +400,26 @@ module mp_thompson
          real(kind_phys),           intent(in   ) :: con_eps
          ! Hydrometeors
          logical,                   intent(in   ) :: convert_dry_rho
-         real(kind_phys),           intent(inout) :: spechum(:,:)
-         real(kind_phys),           intent(inout) :: qc(:,:)
-         real(kind_phys),           intent(inout) :: qr(:,:)
-         real(kind_phys),           intent(inout) :: qi(:,:)
-         real(kind_phys),           intent(inout) :: qs(:,:)
-         real(kind_phys),           intent(inout) :: qg(:,:)
-         real(kind_phys),           intent(inout) :: ni(:,:)
-         real(kind_phys),           intent(inout) :: nr(:,:)
+         real(kind_phys),           intent(in   ) :: spechum(:,:)
+         real(kind_phys),           intent(in   ) :: qc(:,:)
+         real(kind_phys),           intent(in   ) :: qr(:,:)
+         real(kind_phys),           intent(in   ) :: qi(:,:)
+         real(kind_phys),           intent(in   ) :: qs(:,:)
+         real(kind_phys),           intent(in   ) :: qg(:,:)
+         real(kind_phys),           intent(in   ) :: ni(:,:)
+         real(kind_phys),           intent(in   ) :: nr(:,:)
          ! Aerosols
          logical,                   intent(in)    :: is_aerosol_aware, fullradar_diag 
          logical,                   intent(in)    :: merra2_aerosol_aware
-         real(kind_phys), optional, intent(inout) :: nc(:,:)
-         real(kind_phys), optional, intent(inout) :: nwfa(:,:)
-         real(kind_phys), optional, intent(inout) :: nifa(:,:)
+         real(kind_phys), optional, intent(in   ) :: nc(:,:)
+         real(kind_phys), optional, intent(in   ) :: nwfa(:,:)
+         real(kind_phys), optional, intent(in   ) :: nifa(:,:)
          real(kind_phys), optional, intent(in   ) :: nwfa2d(:)
          real(kind_phys), optional, intent(in   ) :: nifa2d(:)
          real(kind_phys),           intent(in)    :: aerfld(:,:,:)
          logical,         optional, intent(in   ) :: aero_ind_fdb
          ! State variables and timestep information
-         real(kind_phys),           intent(inout) :: tgrs(:,:)
+         real(kind_phys),           intent(in   ) :: tgrs(:,:)
          real(kind_phys),           intent(in   ) :: prsl(:,:)
          real(kind_phys),           intent(in   ) :: phii(:,:)
          real(kind_phys),           intent(in   ) :: omega(:,:)
@@ -383,10 +430,10 @@ module mp_thompson
          real,                      intent(in   ) :: dt_inner
          ! Precip/rain/snow/graupel fall amounts and fraction of frozen precip
          real(kind_phys),           intent(inout) :: prcp(:)
-         real(kind_phys),           intent(inout), optional :: rain(:)
-         real(kind_phys),           intent(inout), optional :: graupel(:)
-         real(kind_phys),           intent(inout), optional :: ice(:)
-         real(kind_phys),           intent(inout), optional :: snow(:)
+         real(kind_phys),           intent(inout) :: rain(:)
+         real(kind_phys),           intent(inout) :: graupel(:)
+         real(kind_phys),           intent(inout) :: ice(:)
+         real(kind_phys),           intent(inout) :: snow(:)
          real(kind_phys),           intent(  out) :: sr(:)
          ! Radar reflectivity
          real(kind_phys),           intent(inout) :: refl_10cm(:,:)
@@ -403,7 +450,23 @@ module mp_thompson
          logical,                   intent(in)    :: ext_diag
          real(kind_phys), target,   intent(inout), optional :: diag3d(:,:,:)
          logical,                   intent(in)    :: reset_diag3d
-
+         
+         real(kind_phys),           intent(  out) :: ten_q(:,:,:)
+         real(kind_phys),           intent(  out) :: ten_u(:,:)
+         real(kind_phys),           intent(  out) :: ten_v(:,:)
+         real(kind_phys),           intent(  out) :: dspechum(:,:)
+         real(kind_phys),           intent(  out) :: dqc(:,:)
+         real(kind_phys),           intent(  out) :: dqr(:,:)
+         real(kind_phys),           intent(  out) :: dqi(:,:)
+         real(kind_phys),           intent(  out) :: dqs(:,:)
+         real(kind_phys),           intent(  out) :: dqg(:,:)
+         real(kind_phys),           intent(  out) :: dni(:,:)
+         real(kind_phys),           intent(  out) :: dnr(:,:)
+         real(kind_phys), optional, intent(  out) :: dnc(:,:)
+         real(kind_phys), optional, intent(  out) :: dnwfa(:,:)
+         real(kind_phys), optional, intent(  out) :: dnifa(:,:)
+         real(kind_phys),           intent(  out) :: dtgrs(:,:)
+         
          ! CCPP error handling
          character(len=*),          intent(  out) :: errmsg
          integer,                   intent(  out) :: errflg
@@ -414,12 +477,15 @@ module mp_thompson
          real(kind_phys),           intent(in), optional :: spp_wts_mp(:,:)
          real(kind_phys),           intent(in), optional :: spp_prt_list(:)
          character(len=10),         intent(in), optional :: spp_var_list(:)
-         real(kind_phys),           intent(in) :: spp_stddev_cutoff(:)
+         real(kind_phys),           intent(in), optional :: spp_stddev_cutoff(:)
 
          logical, intent (in) :: cplchm
          ! ice and liquid water 3d precipitation fluxes - only allocated if cplchm is .true.
          real(kind=kind_phys), intent(inout), dimension(:,:), optional :: pfi_lsan
          real(kind=kind_phys), intent(inout), dimension(:,:), optional :: pfl_lsan
+
+         ! fall speed adjustment
+         real(kind_phys),           intent(in), optional :: fs_fac_rain, fs_fac_snow
 
          ! Local variables
 
@@ -442,7 +508,18 @@ module mp_thompson
          real(kind_phys) :: delta_graupel_mp(1:ncol)        ! mm
          real(kind_phys) :: delta_ice_mp(1:ncol)            ! mm
          real(kind_phys) :: delta_snow_mp(1:ncol)           ! mm
-
+         
+         real(kind_phys) :: new_spechum(1:ncol,1:nlev)
+         real(kind_phys) :: new_qc(1:ncol,1:nlev)
+         real(kind_phys) :: new_qr(1:ncol,1:nlev)
+         real(kind_phys) :: new_qi(1:ncol,1:nlev)
+         real(kind_phys) :: new_qs(1:ncol,1:nlev)
+         real(kind_phys) :: new_qg(1:ncol,1:nlev)
+         real(kind_phys) :: new_ni(1:ncol,1:nlev)
+         real(kind_phys) :: new_nr(1:ncol,1:nlev)
+         real(kind_phys), allocatable :: new_nc(:,:), new_nwfa(:,:), new_nifa(:,:)
+         real(kind_phys) :: new_tgrs(1:ncol,1:nlev)
+         
          real(kind_phys) :: pfils(1:ncol,1:nlev,1)
          real(kind_phys) :: pflls(1:ncol,1:nlev,1)
          ! Radar reflectivity
@@ -504,7 +581,46 @@ module mp_thompson
          ! Initialize the CCPP error handling variables
          errmsg = ''
          errflg = 0
-
+         
+         ten_q    = 0.0 ! Since this scheme is outputting tracer tendencies individually,
+                        ! we also need to initialize the entire array to 0, so that when
+                        ! tendencies are applied, all tracer tendencies other than those
+                        ! set in this scheme are 0.
+         ten_u    = 0.0
+         ten_v    = 0.0
+         dspechum = 0.0
+         dqc      = 0.0
+         dqr      = 0.0
+         dqi      = 0.0
+         dqs      = 0.0
+         dqg      = 0.0
+         dni      = 0.0
+         dnr      = 0.0
+         dtgrs    = 0.0
+         
+         new_spechum = spechum
+         new_qc = qc
+         new_qr = qr
+         new_qi = qi
+         new_qs = qs
+         new_qg = qg
+         new_ni = ni
+         new_nr = nr
+         new_tgrs = tgrs
+         
+         if (is_aerosol_aware .or. merra2_aerosol_aware) then
+           dnc      = 0.0
+           dnwfa    = 0.0
+           dnifa    = 0.0
+           
+           allocate(new_nc(ncol,nlev))
+           allocate(new_nwfa(ncol,nlev))
+           allocate(new_nifa(ncol,nlev))
+           new_nc   = nc
+           new_nwfa = nwfa
+           new_nifa = nifa
+         end if
+         
          if (first_time_step .and. istep==1 .and. blkno==1) then
             ! Check initialization state
             if (.not.is_initialized) then
@@ -562,7 +678,7 @@ module mp_thompson
             dtstep = dtp
          end if
          if (merra2_aerosol_aware) then
-           call get_niwfa(aerfld, nifa, nwfa, ncol, nlev)
+           call get_niwfa(aerfld, new_nifa, new_nwfa, ncol, nlev)
          end if
 
          !> - Convert specific humidity to water vapor mixing ratio.
@@ -572,27 +688,27 @@ module mp_thompson
          ! DH* - do this only if istep == 1? Would be ok if it was
          ! guaranteed that nothing else in the same subcycle group
          ! was using these arrays, but it is somewhat dangerous.
-         qv = spechum/(1.0_kind_phys-spechum)
+         qv = new_spechum/(1.0_kind_phys-new_spechum)
 
          if (convert_dry_rho) then
-           qc = qc/(1.0_kind_phys-spechum)
-           qr = qr/(1.0_kind_phys-spechum)
-           qi = qi/(1.0_kind_phys-spechum)
-           qs = qs/(1.0_kind_phys-spechum)
-           qg = qg/(1.0_kind_phys-spechum)
+           new_qc = new_qc/(1.0_kind_phys-new_spechum)
+           new_qr = new_qr/(1.0_kind_phys-new_spechum)
+           new_qi = new_qi/(1.0_kind_phys-new_spechum)
+           new_qs = new_qs/(1.0_kind_phys-new_spechum)
+           new_qg = new_qg/(1.0_kind_phys-new_spechum)
 
-           ni = ni/(1.0_kind_phys-spechum)
-           nr = nr/(1.0_kind_phys-spechum)
+           new_ni = new_ni/(1.0_kind_phys-new_spechum)
+           new_nr = new_nr/(1.0_kind_phys-new_spechum)
            if (is_aerosol_aware .or. merra2_aerosol_aware) then
-              nc = nc/(1.0_kind_phys-spechum)
-              nwfa = nwfa/(1.0_kind_phys-spechum)
-              nifa = nifa/(1.0_kind_phys-spechum)
+              new_nc = new_nc/(1.0_kind_phys-new_spechum)
+              new_nwfa = new_nwfa/(1.0_kind_phys-new_spechum)
+              new_nifa = new_nifa/(1.0_kind_phys-new_spechum)
            end if
          end if
          ! *DH
 
          !> - Density of air in kg m-3
-         rho = con_eps*prsl/(con_rd*tgrs*(qv+con_eps))
+         rho = con_eps*prsl/(con_rd*new_tgrs*(qv+con_eps))
 
          !> - Convert omega in Pa s-1 to vertical velocity w in m s-1
          w = -omega/(rho*con_g)
@@ -692,9 +808,9 @@ module mp_thompson
          end if set_extended_diagnostic_pointers
          !> - Call mp_gt_driver() with or without aerosols, with or without effective radii, ...
          if (is_aerosol_aware) then
-            call mp_gt_driver(qv=qv, qc=qc, qr=qr, qi=qi, qs=qs, qg=qg, ni=ni, nr=nr,        &
-                              nc=nc, nwfa=nwfa, nifa=nifa, nwfa2d=nwfa2d, nifa2d=nifa2d,     &
-                              tt=tgrs, p=prsl, w=w, dz=dz, dt_in=dtstep, dt_inner=dt_inner,  &
+            call mp_gt_driver(qv=qv, qc=new_qc, qr=new_qr, qi=new_qi, qs=new_qs, qg=new_qg, ni=new_ni, nr=new_nr,        &
+                              nc=new_nc, nwfa=new_nwfa, nifa=new_nifa, nwfa2d=nwfa2d, nifa2d=nifa2d,     &
+                              tt=new_tgrs, p=prsl, w=w, dz=dz, dt_in=dtstep, dt_inner=dt_inner,  &
                               sedi_semi=sedi_semi, decfl=decfl, lsm=islmsk,                  &
                               rainnc=rain_mp, rainncv=delta_rain_mp,                         &
                               snownc=snow_mp, snowncv=delta_snow_mp,                         &
@@ -732,11 +848,12 @@ module mp_thompson
                               tprv_rev=tprv_rev, tten3=tten3,                                &
                               qvten3=qvten3, qrten3=qrten3, qsten3=qsten3, qgten3=qgten3,    &
                               qiten3=qiten3, niten3=niten3, nrten3=nrten3, ncten3=ncten3,    &
-                              qcten3=qcten3, pfils=pfils, pflls=pflls)
+                              qcten3=qcten3, pfils=pfils, pflls=pflls,                       &
+                              fs_fac_rain=fs_fac_rain, fs_fac_snow=fs_fac_snow)
          else if (merra2_aerosol_aware) then
-             call mp_gt_driver(qv=qv, qc=qc, qr=qr, qi=qi, qs=qs, qg=qg, ni=ni, nr=nr,        &
-                               nc=nc, nwfa=nwfa, nifa=nifa,                                   &
-                               tt=tgrs, p=prsl, w=w, dz=dz, dt_in=dtstep, dt_inner=dt_inner,  &
+             call mp_gt_driver(qv=qv, qc=new_qc, qr=new_qr, qi=new_qi, qs=new_qs, qg=new_qg, ni=new_ni, nr=new_nr,        &
+                               nc=new_nc, nwfa=new_nwfa, nifa=new_nifa,                                   &
+                               tt=new_tgrs, p=prsl, w=w, dz=dz, dt_in=dtstep, dt_inner=dt_inner,  &
                                sedi_semi=sedi_semi, decfl=decfl, lsm=islmsk,                  &
                                rainnc=rain_mp, rainncv=delta_rain_mp,                         &
                                snownc=snow_mp, snowncv=delta_snow_mp,                         &
@@ -774,10 +891,11 @@ module mp_thompson
                                tprv_rev=tprv_rev, tten3=tten3,                                &
                                qvten3=qvten3, qrten3=qrten3, qsten3=qsten3, qgten3=qgten3,    &
                                qiten3=qiten3, niten3=niten3, nrten3=nrten3, ncten3=ncten3,    &
-                               qcten3=qcten3, pfils=pfils, pflls=pflls)
+                               qcten3=qcten3, pfils=pfils, pflls=pflls,                       &
+                               fs_fac_rain=fs_fac_rain, fs_fac_snow=fs_fac_snow)
          else
-            call mp_gt_driver(qv=qv, qc=qc, qr=qr, qi=qi, qs=qs, qg=qg, ni=ni, nr=nr,        &
-                              tt=tgrs, p=prsl, w=w, dz=dz, dt_in=dtstep, dt_inner=dt_inner,  &
+            call mp_gt_driver(qv=qv, qc=new_qc, qr=new_qr, qi=new_qi, qs=new_qs, qg=new_qg, ni=new_ni, nr=new_nr,        &
+                              tt=new_tgrs, p=prsl, w=w, dz=dz, dt_in=dtstep, dt_inner=dt_inner,  &
                               sedi_semi=sedi_semi, decfl=decfl, lsm=islmsk,                  &
                               rainnc=rain_mp, rainncv=delta_rain_mp,                         &
                               snownc=snow_mp, snowncv=delta_snow_mp,                         &
@@ -814,7 +932,8 @@ module mp_thompson
                               tprv_rev=tprv_rev, tten3=tten3,                                &
                               qvten3=qvten3, qrten3=qrten3, qsten3=qsten3, qgten3=qgten3,    &
                               qiten3=qiten3, niten3=niten3, nrten3=nrten3, ncten3=ncten3,    &
-                              qcten3=qcten3, pfils=pfils, pflls=pflls)
+                              qcten3=qcten3, pfils=pfils, pflls=pflls,                       &
+                              fs_fac_rain=fs_fac_rain, fs_fac_snow=fs_fac_snow)
          end if
          if (errflg/=0) return
 
@@ -823,21 +942,21 @@ module mp_thompson
          ! was using these arrays, but it is somewhat dangerous.
 
          !> - Convert water vapor mixing ratio back to specific humidity
-         spechum = qv/(1.0_kind_phys+qv)
+         new_spechum = qv/(1.0_kind_phys+qv)
 
          if (convert_dry_rho) then
-           qc = qc/(1.0_kind_phys+qv)
-           qr = qr/(1.0_kind_phys+qv)
-           qi = qi/(1.0_kind_phys+qv)
-           qs = qs/(1.0_kind_phys+qv)
-           qg = qg/(1.0_kind_phys+qv)
+           new_qc = new_qc/(1.0_kind_phys+qv)
+           new_qr = new_qr/(1.0_kind_phys+qv)
+           new_qi = new_qi/(1.0_kind_phys+qv)
+           new_qs = new_qs/(1.0_kind_phys+qv)
+           new_qg = new_qg/(1.0_kind_phys+qv)
 
-           ni = ni/(1.0_kind_phys+qv)
-           nr = nr/(1.0_kind_phys+qv)
+           new_ni = new_ni/(1.0_kind_phys+qv)
+           new_nr = new_nr/(1.0_kind_phys+qv)
            if (is_aerosol_aware .or. merra2_aerosol_aware) then
-              nc = nc/(1.0_kind_phys+qv)
-              nwfa = nwfa/(1.0_kind_phys+qv)
-              nifa = nifa/(1.0_kind_phys+qv)
+              new_nc = new_nc/(1.0_kind_phys+qv)
+              new_nwfa = new_nwfa/(1.0_kind_phys+qv)
+              new_nifa = new_nifa/(1.0_kind_phys+qv)
            end if
          end if
          ! *DH
@@ -862,64 +981,33 @@ module mp_thompson
            pfl_lsan(:,:) = pflls(:,:,1)
          end if
 
-         ! DH* Not really needed because they go out of scope ...
-         ! But having them in here seems to cause problems with Intel?
-         ! It looked like this is also nullifying the pointers passed
-         ! from the CCPP caps.
-         !unset_extended_diagnostic_pointers: if (ext_diag) then
-         !  !vts1       => null()
-         !  !txri       => null()
-         !  !txrc       => null()
-         !  prw_vcdc   => null()
-         !  prw_vcde   => null()
-         !  tpri_inu   => null()
-         !  tpri_ide_d => null()
-         !  tpri_ide_s => null()
-         !  tprs_ide   => null()
-         !  tprs_sde_d => null()
-         !  tprs_sde_s => null()
-         !  tprg_gde_d => null()
-         !  tprg_gde_s => null()
-         !  tpri_iha   => null()
-         !  tpri_wfz   => null()
-         !  tpri_rfz   => null()
-         !  tprg_rfz   => null()
-         !  tprs_scw   => null()
-         !  tprg_scw   => null()
-         !  tprg_rcs   => null()
-         !  tprs_rcs   => null()
-         !  tprr_rci   => null()
-         !  tprg_rcg   => null()
-         !  tprw_vcd_c => null()
-         !  tprw_vcd_e => null()
-         !  tprr_sml   => null()
-         !  tprr_gml   => null()
-         !  tprr_rcg   => null()
-         !  tprr_rcs   => null()
-         !  tprv_rev   => null()
-         !  tten3      => null()
-         !  qvten3     => null()
-         !  qrten3     => null()
-         !  qsten3     => null()
-         !  qgten3     => null()
-         !  qiten3     => null()
-         !  niten3     => null()
-         !  nrten3     => null()
-         !  ncten3     => null()
-         !  qcten3     => null()
-         !end if unset_extended_diagnostic_pointers
-         ! *DH
-
+         dspechum = (new_spechum - spechum)/dtp
+         dqc = (new_qc - qc)/dtp
+         dqr = (new_qr - qr)/dtp
+         dqi = (new_qi - qi)/dtp
+         dqs = (new_qs - qs)/dtp
+         dqg = (new_qg - qg)/dtp
+         dni = (new_ni - ni)/dtp
+         dnr = (new_nr - nr)/dtp
+         dtgrs = (new_tgrs - tgrs)/dtp
+         if (is_aerosol_aware .or. merra2_aerosol_aware) then
+           dnc = (new_nc - nc)/dtp
+           dnwfa = (new_nwfa - nwfa)/dtp
+           dnifa = (new_nifa - nifa)/dtp
+           
+           deallocate(new_nc, new_nwfa, new_nifa)
+         end if
+         
       end subroutine mp_thompson_run
 !>@}
 
 !> \section arg_table_mp_thompson_finalize Argument Table
 !! \htmlinclude mp_thompson_finalize.html
 !!
-      subroutine mp_thompson_finalize(errmsg, errflg)
+      subroutine mp_thompson_finalize(is_initialized, errmsg, errflg)
 
          implicit none
-
+         logical,                   intent(inout) :: is_initialized
          character(len=*),          intent(  out) :: errmsg
          integer,                   intent(  out) :: errflg
 

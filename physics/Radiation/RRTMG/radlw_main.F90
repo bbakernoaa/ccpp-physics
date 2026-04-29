@@ -609,7 +609,7 @@
       integer, intent(in) :: npts, nlay, nlp1, ilwcliq, ilwcice,        &
            isubclw, iovr, iovr_dcorr, iovr_exp, iovr_exprand, iovr_rand,&
            iovr_maxrand, iovr_max
-      integer, intent(in), optional :: icseed(npts)
+      integer, intent(in) :: icseed(npts)
 
       logical,  intent(in) :: lprnt, inc_minor_gas
 
@@ -630,7 +630,8 @@
 
       real (kind=kind_phys), dimension(:), intent(in) :: sfemis,        &
      &       sfgtmp, de_lgth
-      real (kind=kind_phys), dimension(npts,nlay), intent(in) :: alpha
+      real (kind=kind_phys), dimension(npts,nlay),intent(in) ::         &
+             alpha
 
       real (kind=kind_phys), dimension(:,:,:),intent(in)::              &
      &       aeraod, aerssa
@@ -766,7 +767,7 @@
         do i = 1, npts
           ipseed(i) = ipsdlw0 + i
         enddo
-      elseif ( isubclw == 2 ) then     ! use input array of permutaion seeds
+      elseif ( isubclw == 2 ) then     ! use input array of permutation seeds
         do i = 1, npts
           ipseed(i) = icseed(i)
         enddo
@@ -1434,7 +1435,7 @@
      &            'sub-column clouds approximation applied'
         elseif ( isubclw == 1 ) then
           print *,'   --- Using MCICA sub-colum clouds approximation ', &
-     &            'with a prescribed sequence of permutaion seeds'
+     &            'with a prescribed sequence of permutation seeds'
         elseif ( isubclw == 2 ) then
           print *,'   --- Using MCICA sub-colum clouds approximation ', &
      &            'with provided input array of permutation seeds'
@@ -1829,7 +1830,6 @@
 
       endif   ! end if_isubclw_block
 
-      return
 ! ..................................
       end subroutine cldprop
 ! ----------------------------------
@@ -2102,7 +2102,6 @@
         enddo
       enddo
 
-      return
 ! ..................................
       end subroutine mcica_subcol
 ! ----------------------------------
@@ -2401,7 +2400,6 @@
 
       enddo   ! end do_k layer loop
 
-      return
 ! ..................................
       end subroutine setcoef
 ! ----------------------------------

@@ -14,16 +14,16 @@
       subroutine set_aerosol_tracer_index(imp_physics, imp_physics_wsm6,          &
                                           imp_physics_thompson, ltaerosol,mraerosol,   &
                                           imp_physics_mg, ntgl, imp_physics_gfdl, &
-                                          imp_physics_zhao_carr, imp_physics_nssl,&
-                                          nssl_hail_on, nssl_ccn_on, kk,          &
+                                          imp_physics_nssl,                       &
+                                          nssl_hail_on, nssl_ccn_on, nssl_3moment, kk, &
                                           errmsg, errflg)
       implicit none
       !
       integer, intent(in )          :: imp_physics, imp_physics_wsm6,          &
                                        imp_physics_thompson,                   &
                                        imp_physics_mg, ntgl, imp_physics_gfdl, &
-                                       imp_physics_zhao_carr,imp_physics_nssl
-      logical, intent(in )          :: ltaerosol, mraerosol, nssl_hail_on, nssl_ccn_on
+                                       imp_physics_nssl
+      logical, intent(in )          :: ltaerosol, mraerosol, nssl_hail_on, nssl_ccn_on, nssl_3moment
       integer, intent(out)          :: kk
       character(len=*), intent(out) :: errmsg
       integer, intent(out)          :: errflg
@@ -53,14 +53,13 @@
       elseif (imp_physics == imp_physics_gfdl) then
 ! GFDL MP
         kk = 7
-      elseif (imp_physics == imp_physics_zhao_carr) then
-! Zhao/Carr/Sundqvist
-        kk = 3
       elseif (imp_physics == imp_physics_nssl) then
         IF ( nssl_hail_on ) THEN
           kk = 16
+          IF ( nssl_3moment ) kk = kk + 3
         ELSE
           kk = 13
+          IF ( nssl_3moment ) kk = kk + 2
         ENDIF
         IF ( nssl_ccn_on ) kk = kk + 1
       else

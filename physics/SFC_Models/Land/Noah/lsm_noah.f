@@ -285,8 +285,9 @@
       real (kind=kind_phys), dimension(:), intent(inout) :: sncovr1,    &
      &       qsurf, gflux, drain, evap, hflx, ep, runoff, cmm, chh,     &
      &       evbs, evcw, sbsno, snowc, stm, snohf, smcwlt2, smcref2
+      real (kind=kind_phys), dimension(:), intent(inout) :: lai, rca
       real (kind=kind_phys), dimension(:), intent(inout), optional ::   &
-     &       wet1, lai, rca
+     &       wet1
       
       character(len=*), intent(out) :: errmsg
       integer,          intent(out) :: errflg
@@ -545,6 +546,7 @@
      &       snomlt, sncovr, rc, pc, rsmin, xlai, rcs, rct, rcq,        &
      &       rcsoil, soilw, soilm, smcwlt, smcdry, smcref, smcmax,      &
      &       errmsg, errflg )
+          if(errflg/=0) return
 
 !> - Noah LSM: prepare variables for return to parent model and unit conversion.
 !  -   6. output (o):
@@ -676,7 +678,6 @@
         endif     ! land
       enddo
 !
-      return
 !...................................
       end subroutine lsm_noah_run
 !-----------------------------

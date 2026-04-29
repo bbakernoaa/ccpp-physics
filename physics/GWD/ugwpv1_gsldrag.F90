@@ -43,6 +43,9 @@ module ugwpv1_gsldrag
     use cires_ugwpv1_module,   only:  cires_ugwpv1_init, ngwflux_update, calendar_ugwp
     use cires_ugwpv1_module,   only:  knob_ugwp_version, cires_ugwp_dealloc, tamp_mpa
     use cires_ugwpv1_solv2,    only:  cires_ugwpv1_ngw_solv2
+!    use cires_ugwpv1_solv2,     only:  cires_ugwpv1_ngw_solv2, ecmwf_ngw
+     use ecmwf_ngw,             only:  ecmwf_ngw_emc
+
     use cires_ugwpv1_oro,      only:  orogw_v1
 
     use drag_suite,            only:  drag_suite_run, drag_suite_psl
@@ -70,7 +73,8 @@ contains
                 con_pi, con_rerth, con_p0,                                     &
                 con_g, con_omega,  con_cp, con_rd, con_rv,con_fvirt,           &
                 do_ugwp,do_ugwp_v0, do_ugwp_v0_orog_only, do_gsl_drag_ls_bl,   &
-                do_gsl_drag_ss, do_gsl_drag_tofd, do_ugwp_v1,                  &
+                  do_gsl_drag_ss, do_gsl_drag_tofd, do_ngw_ec, do_ugwp_v1,     &
+!!                do_gsl_drag_ss, do_gsl_drag_tofd, do_ugwp_v1,                  &
                 do_ugwp_v1_orog_only, do_ugwp_v1_w_gsldrag, errmsg, errflg)
 
     use ugwp_common
@@ -94,9 +98,10 @@ contains
     real(kind=kind_phys), intent (in) :: con_g, con_cp, con_rd, con_rv, con_omega, con_fvirt
     logical,              intent (in) :: do_ugwp
 
-    logical,              intent (in) :: do_ugwp_v0, do_ugwp_v0_orog_only,  &
-                                         do_gsl_drag_ls_bl, do_gsl_drag_ss, &
-                                         do_gsl_drag_tofd, do_ugwp_v1,      &
+    logical,              intent (in) :: do_ugwp_v0, do_ugwp_v0_orog_only,         &
+                                         do_gsl_drag_ls_bl, do_gsl_drag_ss,        &
+!!                                       do_gsl_drag_tofd, do_ugwp_v1,             &
+                                         do_gsl_drag_tofd, do_ugwp_v1, do_ngw_ec,  &
                                          do_ugwp_v1_orog_only,do_ugwp_v1_w_gsldrag
 
     character(len=*), intent (in)  :: fn_nml2
@@ -299,10 +304,10 @@ contains
 !! \htmlinclude ugwpv1_gsldrag_run.html
 !!
      subroutine ugwpv1_gsldrag_run(me, master, im, levs, ak, bk, ntrac, lonr, dtp,      &
-          fhzero, kdt, ldiag3d, lssav, flag_for_gwd_generic_tend, do_gsl_drag_ls_bl,    &
+          kdt, ldiag3d, lssav, flag_for_gwd_generic_tend, do_gsl_drag_ls_bl,            &
           do_gsl_drag_ss, do_gsl_drag_tofd,                                             &
           do_gwd_opt_psl, psl_gwd_dx_factor,                                            &
-          do_ugwp_v1, do_ugwp_v1_orog_only,                                             &
+          do_ngw_ec, do_ugwp_v1,  do_ugwp_v1_orog_only,                                 &
           do_ugwp_v1_w_gsldrag, gwd_opt, do_tofd, ldiag_ugwp, ugwp_seq_update,          &
           cdmbgwd, alpha_fd, jdat, nmtvr, hprime, oc, theta, sigma, gamma,              &
           elvmax, clx, oa4, varss,oc1ss,oa4ss,ol4ss, dx,  xlat, xlat_d, sinlat, coslat, &
@@ -312,9 +317,9 @@ contains
           dudt_obl, dvdt_obl, du_oblcol, dv_oblcol,                                     &
           dudt_oss, dvdt_oss, du_osscol, dv_osscol,                                     &
           dudt_ofd, dvdt_ofd, du_ofdcol, dv_ofdcol,                                     &
-          dudt_ngw, dvdt_ngw, dtdt_ngw, kdis_ngw, dudt_gw, dvdt_gw, dtdt_gw, kdis_gw,   &
-          tau_ogw, tau_ngw,  tau_oss,                                                   &
-          zogw,  zlwb,  zobl,  zngw,   dusfcg, dvsfcg,  dudt, dvdt, dtdt, rdxzb,        &
+          dudt_ngw, dvdt_ngw, dtdt_ngw, kdis_ngw, dudt_gw, dvdt_gw, dtdt_gw, dqdt_gw,   &
+          kdis_gw, tau_ogw, tau_ngw,  tau_oss,                                          &
+          zogw,  zlwb,  zobl,  zngw,   dusfcg, dvsfcg, rdxzb,                           &
           dtend, dtidx, index_of_x_wind, index_of_y_wind, index_of_temperature,         &
           index_of_process_orographic_gwd, index_of_process_nonorographic_gwd,          &
           lprnt, ipr, spp_wts_gwd, spp_gwd, errmsg, errflg)
@@ -356,12 +361,12 @@ contains
 ! flags for choosing combination of GW drag schemes to run
 
     logical,  intent (in) :: do_gsl_drag_ls_bl, do_gsl_drag_ss, do_gsl_drag_tofd
-    logical,  intent (in) :: do_ugwp_v1, do_ugwp_v1_orog_only, do_tofd
+    logical,  intent (in) :: do_ugwp_v1, do_ngw_ec, do_ugwp_v1_orog_only, do_tofd
     logical,  intent (in) :: ldiag_ugwp, ugwp_seq_update
     logical,  intent (in) :: do_ugwp_v1_w_gsldrag                              ! combination of ORO and NGW schemes
 
     integer,                 intent(in) :: me, master, im, levs, ntrac,lonr
-    real(kind=kind_phys),    intent(in) :: dtp, fhzero
+    real(kind=kind_phys),    intent(in) :: dtp
     real(kind=kind_phys),    intent(in) :: ak(:), bk(:)
     integer,                 intent(in) :: kdt, jdat(:)
 ! option  for psl gwd
@@ -378,8 +383,8 @@ contains
     real(kind=kind_phys),    intent(in), dimension(:,:)     :: clx, oa4
 
     real(kind=kind_phys),    intent(in), dimension(:)       :: dx
-    real(kind=kind_phys),    intent(in), dimension(:), optional       :: varss,oc1ss
-    real(kind=kind_phys),    intent(in), dimension(:,:), optional     :: oa4ss,ol4ss
+    real(kind=kind_phys),    intent(in), dimension(:)       :: varss,oc1ss
+    real(kind=kind_phys),    intent(in), dimension(:,:)     :: oa4ss,ol4ss
 
 !=====
 !ccpp-style passing constants, I prefer to take them out from the "call-subr" list
@@ -408,7 +413,7 @@ contains
 
 !Output (optional):
 
-    real(kind=kind_phys), intent(out), dimension(:), optional  ::         &
+    real(kind=kind_phys), intent(out), dimension(:)  ::         &
                             du_ogwcol,  dv_ogwcol,  du_oblcol, dv_oblcol, &
                             du_osscol,  dv_osscol,  du_ofdcol, dv_ofdcol
 !
@@ -418,18 +423,16 @@ contains
     real(kind=kind_phys), intent(out), dimension(:)  :: dusfcg, dvsfcg
     real(kind=kind_phys), intent(out), dimension(:)  :: tau_ogw, tau_ngw, tau_oss
 
-    real(kind=kind_phys), intent(out) , dimension(:,:), optional ::         &
+    real(kind=kind_phys), intent(out) , dimension(:,:) ::         &
                           dudt_ogw, dvdt_ogw, dudt_obl, dvdt_obl, &
                           dudt_oss, dvdt_oss, dudt_ofd, dvdt_ofd
 
-    real(kind=kind_phys), intent(out) , dimension(:,:), optional :: dudt_ngw, dvdt_ngw, kdis_ngw, dtdt_ngw
+    real(kind=kind_phys), intent(out) , dimension(:,:) :: dudt_ngw, dvdt_ngw, kdis_ngw, dtdt_ngw
     real(kind=kind_phys), intent(out) , dimension(:,:) :: dudt_gw,  dvdt_gw, dtdt_gw, kdis_gw
+    real(kind=kind_phys), intent(out) , dimension(:,:,:) :: dqdt_gw
 
     real(kind=kind_phys), intent(out) , dimension(:)   :: zogw, zlwb, zobl, zngw
 !
-!
-    real(kind=kind_phys), intent(inout), dimension(:,:) :: dudt, dvdt, dtdt
-
     real(kind=kind_phys), intent(inout), optional            :: dtend(:,:,:)
     integer, intent(in)                                      :: dtidx(:,:)
     integer, intent(in)                                 :: & 
@@ -511,7 +514,7 @@ contains
 
 ! ngw+ogw - diag
 
-       dudt_gw(:,:)=0. ;  dvdt_gw(:,:)=0.  ; dtdt_gw(:,:)=0.  ; kdis_gw(:,:)=0.
+       dudt_gw(:,:)=0. ;  dvdt_gw(:,:)=0.  ; dtdt_gw(:,:)=0.  ; dqdt_gw(:,:,:)=0. ; kdis_gw(:,:)=0.
 ! source fluxes
 
       tau_ogw(:)=0. ; tau_ngw(:)=0. ;  tau_oss(:)=0.
@@ -560,13 +563,13 @@ contains
                  cdmbgwd(1:2),alpha_fd,me,master,                    &
                  lprnt,ipr,rdxzb,dx,gwd_opt,  &
                  do_gsl_drag_ls_bl,do_gsl_drag_ss,do_gsl_drag_tofd,  &
-                 psl_gwd_dx_factor,                                  &
+                 psl_gwd_dx_factor, flag_for_gwd_generic_tend,       &
                  dtend, dtidx, index_of_process_orographic_gwd,      &
                  index_of_temperature, index_of_x_wind,              &
                  index_of_y_wind, ldiag3d, ldiag_ugwp,               &
                  ugwp_seq_update, spp_wts_gwd, spp_gwd, errmsg, errflg)
      else
-       call drag_suite_run(im, levs, Pdvdt, Pdudt, Pdtdt,            &
+       call drag_suite_run(im, levs, Pdvdt, Pdudt, Pdtdt, dqdt_gw,   &
                  ugrs,vgrs,tgrs,q1,                                  &
                  kpbl,prsi,del,prsl,prslk,phii,phil,dtp,             &
                  kdt,hprime,oc,oa4,clx,varss,oc1ss,oa4ss,            &
@@ -581,11 +584,14 @@ contains
                  cdmbgwd(1:2),alpha_fd,me,master,                    &
                  lprnt,ipr,rdxzb,dx,gwd_opt,  &
                  do_gsl_drag_ls_bl,do_gsl_drag_ss,do_gsl_drag_tofd,  &
+                 flag_for_gwd_generic_tend,                          &
                  dtend, dtidx, index_of_process_orographic_gwd,      &
                  index_of_temperature, index_of_x_wind,              &
                  index_of_y_wind, ldiag3d, ldiag_ugwp,               &
                  ugwp_seq_update, spp_wts_gwd, spp_gwd, errmsg, errflg)
      endif
+     if(errflg/=0) return
+
 !
 ! dusfcg = du_ogwcol + du_oblcol + du_osscol + du_ofdcol
 !
@@ -635,6 +641,8 @@ contains
                       dudt_obl, dvdt_obl,dudt_ofd, dvdt_ofd,              &
                       du_ogwcol, dv_ogwcol, du_oblcol, dv_oblcol,         &
                       du_ofdcol, dv_ofdcol, errmsg,errflg           )
+       if(errflg/=0) return
+
 !
 ! orogw_v1: dusfcg = du_ogwcol + du_oblcol  + du_ofdcol                           only 3 terms
 !
@@ -698,10 +706,21 @@ contains
        call ngwflux_update(me, master, im, levs, kdt, ddd_ugwp,curdate, &
          tau_amf, xlat_d, sinlat,coslat, rain, tau_ngw)
 
-       call cires_ugwpv1_ngw_solv2(me, master, im,   levs,  kdt, dtp,   &
+       if (do_ngw_ec) then
+
+       call ecmwf_ngw_emc(me, master, im,   levs,  kdt, dtp, dx,        &
                       tau_ngw, tgrs, ugrs,  vgrs,   q1, prsl, prsi,     &
                       zmet, zmeti,prslk,   xlat_d, sinlat, coslat,      &
                       dudt_ngw, dvdt_ngw, dtdt_ngw, kdis_ngw, zngw)
+       else
+
+       call cires_ugwpv1_ngw_solv2(me, master, im, levs, kdt, dtp,      &
+                      tau_ngw, tgrs, ugrs,  vgrs,   q1, prsl, prsi,     &
+                      zmet, zmeti,prslk,   xlat_d, sinlat, coslat,      &
+                      dudt_ngw, dvdt_ngw, dtdt_ngw, kdis_ngw, zngw)
+
+      endif
+
 !
 ! =>  con_g, con_cp, con_rd, con_rv, con_omega,  con_pi, con_fvirt
 !
@@ -723,15 +742,15 @@ contains
     if(ldiag3d .and. lssav .and. .not. flag_for_gwd_generic_tend) then
       idtend = dtidx(index_of_x_wind,index_of_process_nonorographic_gwd)
       if(idtend>=1) then
-         dtend(:,:,idtend) = dtend(:,:,idtend) + dudt_ngw(i,k)*dtp
+         dtend(:,:,idtend) = dtend(:,:,idtend) + dudt_ngw(:,:)*dtp
       endif
       idtend = dtidx(index_of_y_wind,index_of_process_nonorographic_gwd)
       if(idtend>=1) then
-         dtend(:,:,idtend) = dtend(:,:,idtend) + dvdt_ngw(i,k)*dtp
+         dtend(:,:,idtend) = dtend(:,:,idtend) + dvdt_ngw(:,:)*dtp
       endif
       idtend = dtidx(index_of_temperature,index_of_process_nonorographic_gwd)
       if(idtend>=1) then
-         dtend(:,:,idtend) = dtend(:,:,idtend) + dtdt_ngw(i,k)*dtp
+         dtend(:,:,idtend) = dtend(:,:,idtend) + dtdt_ngw(:,:)*dtp
       endif
     endif
 
@@ -749,12 +768,6 @@ contains
         dtdt_gw =  Pdtdt
         kdis_gw =  Pkdis
      end if
-!
-! accumulate "tendencies" as in the GFS-ipd (pbl + ugwp + zero-RF)
-!
-     dudt  = dudt  + dudt_gw
-     dvdt  = dvdt  + dvdt_gw
-     dtdt  = dtdt  + dtdt_gw
 
     end subroutine ugwpv1_gsldrag_run
 end module ugwpv1_gsldrag

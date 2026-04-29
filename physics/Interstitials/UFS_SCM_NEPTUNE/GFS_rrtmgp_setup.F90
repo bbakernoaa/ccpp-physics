@@ -35,9 +35,9 @@ contains
 !! \htmlinclude GFS_rrtmgp_setup_init.html
 !!
   subroutine GFS_rrtmgp_setup_init(do_RRTMGP, imp_physics, imp_physics_fer_hires,        &
-       imp_physics_gfdl, imp_physics_thompson, imp_physics_wsm6, imp_physics_zhao_carr,  &
-       imp_physics_zhao_carr_pdf, imp_physics_mg,  si, levr, ictm, isol, ico2, iaer,     &
-       ntcw, ntoz, iovr, isubc_sw, isubc_lw, lalw1bd, idate,               &
+       imp_physics_gfdl, imp_physics_thompson, imp_physics_wsm6,                         &
+       imp_physics_mg,  si, levr, ictm, isol, ico2, iaer,                                &
+       ntcw, ntoz, iovr, isubc_sw, isubc_lw, lalw1bd, idate,                             &
        me, aeros_file, iaermdl, iaerflg, con_pi, con_t0c, con_c, con_boltz, con_plnk,    &
        solar_file, con_solr_2008, con_solr_2002, co2usr_file, co2cyc_file, ipsd0,        &
        errmsg, errflg)
@@ -50,8 +50,6 @@ contains
          imp_physics_gfdl,          & !< Flag for gfdl scheme
          imp_physics_thompson,      & !< Flag for thompsonscheme
          imp_physics_wsm6,          & !< Flag for wsm6 scheme
-         imp_physics_zhao_carr,     & !< Flag for zhao-carr scheme
-         imp_physics_zhao_carr_pdf, & !< Flag for zhao-carr+PDF scheme
          imp_physics_mg               !< Flag for MG scheme
     real(kind_phys), intent(in) :: &
          con_pi, con_t0c, con_c, con_boltz, con_plnk, con_solr_2008, con_solr_2002
@@ -88,11 +86,6 @@ contains
        iaerflg = mod(iaer, 1000)   
     endif
     iaermdl = iaer/1000               ! control flag for aerosol scheme selection
-    if ( iaermdl < 0 .or.  (iaermdl>2 .and. iaermdl/=5) ) then
-       errmsg = trim(errmsg) // ' Error -- IAER flag is incorrect, Abort'
-       errflg = 1
-       return
-    endif
 
     ! Assign initial permutation seed for mcica cloud-radiation
     if ( isubc_sw>0 .or. isubc_lw>0 ) then
@@ -128,7 +121,9 @@ contains
     call sol_init ( me, isol, solar_file, con_solr_2008, con_solr_2002, con_pi )
     call aer_init ( levr, me, iaermdl, iaerflg, lalw1bd, aeros_file, con_pi, con_t0c,    &
          con_c, con_boltz, con_plnk, errflg, errmsg)
+    if(errflg/=0) return
     call gas_init ( me, co2usr_file, co2cyc_file, ico2, ictm, con_pi, errflg, errmsg )
+    if(errflg/=0) return
 
     if ( me == 0 ) then
        print *,' return from rad_initialize (GFS_rrtmgp_setup_init) - after calling radinit'
@@ -136,7 +131,6 @@ contains
     
     is_initialized = .true.
 
-    return
   end subroutine GFS_rrtmgp_setup_init
 
 !> \section arg_table_GFS_rrtmgp_setup_timestep_init Argument Table
@@ -222,11 +216,13 @@ contains
        endif
        iyear0 = iyear
        call sol_update(jdate, kyear, deltsw, deltim, lsol_chg, me, slag, sdec, cdec, solcon, con_pi, errmsg, errflg)
+       if(errflg/=0) return
     endif
 
     ! Update aerosols...
     if ( lmon_chg ) then
        call aer_update ( iyear, imon, me, iaermdl, aeros_file, errflg, errmsg)
+       if(errflg/=0) return
     endif
 
     ! Update trace gases (co2 only)...
@@ -238,13 +234,13 @@ contains
     endif
     call gas_update (kyear, kmon, kday, khour, lco2_chg, me, co2dat_file, co2gbl_file, ictm,&
          ico2, errflg, errmsg )
+    if(errflg/=0) return
     if (ntoz == 0) then
        call ozphys%update_o3clim(kmon, kday, khour, loz1st)
     endif
     
     if ( loz1st ) loz1st = .false.
 
-    return
   end subroutine GFS_rrtmgp_setup_timestep_init
 
 !> \section arg_table_GFS_rrtmgp_setup_finalize Argument Table

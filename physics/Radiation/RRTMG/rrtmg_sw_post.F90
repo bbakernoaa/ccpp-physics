@@ -15,7 +15,7 @@
                  swhtr, sfcalb1, sfcalb2, sfcalb3, sfcalb4, htswc, htsw0,      &
                  nirbmdi, nirdfdi, visbmdi, visdfdi, nirbmui, nirdfui, visbmui,&
                  visdfui, sfcdsw, sfcnsw, htrsw, swhc, scmpsw, sfcfsw, topfsw, &
-                 errmsg, errflg)
+                 sfcdswc, errmsg, errflg)
 
       use machine,                   only: kind_phys
       use module_radsw_parameters,   only: topfsw_type, sfcfsw_type,   &
@@ -25,7 +25,7 @@
 
       integer,                              intent(in)    :: im, levr, levs,   &
                                                              ltp, nday, lm, kd
-      logical,                              intent(in)    :: lsswr, swhtr
+      logical,                              intent(in)    :: lsswr, swhtr 
       real(kind=kind_phys), dimension(:),   intent(in)    :: sfcalb1, sfcalb2, &
                                                              sfcalb3, sfcalb4
       real(kind=kind_phys), dimension(:,:), intent(in)    :: htswc, htsw0
@@ -34,7 +34,8 @@
                                                              visbmdi, visdfdi, &
                                                              nirbmui, nirdfui, &
                                                              visbmui, visdfui, &
-                                                             sfcdsw,  sfcnsw
+                                                             sfcdsw,  sfcnsw,  &
+                                                             sfcdswc
       real(kind=kind_phys), dimension(:,:), intent(inout) :: htrsw, swhc
 
       type(cmpfsw_type), dimension(:),     intent(inout) :: scmpsw
@@ -44,7 +45,7 @@
       character(len=*), intent(out) :: errmsg
       integer,          intent(out) :: errflg
       ! Local variables
-      integer :: i, k1, k
+      integer :: i, k1, k, n
 
       ! Initialize CCPP error handling variables
       errmsg = ''
@@ -123,6 +124,7 @@
         do i=1,im
           sfcnsw(i) = sfcfsw(i)%dnfxc - sfcfsw(i)%upfxc
           sfcdsw(i) = sfcfsw(i)%dnfxc
+          sfcdswc(i)= sfcfsw(i)%dnfx0
         enddo
 
       endif                                ! end_if_lsswr
