@@ -216,7 +216,7 @@ cj
 !  parameters for updraft velocity calculation
       real(kind=kind_phys) bb1, bb2, csmf, wucb
 !
-!  parameters for prognostic sigma closure                                                                                                                                                      
+!  parameters for prognostic sigma closure
       real(kind=kind_phys) omega_u(im,km),zdqca(im,km),tmfq(im,km),
      &     omegac(im),zeta(im,km),dbyo1(im,km),sigmab(im),qadv(im,km)
       real(kind=kind_phys) gravinv,invdelt,sigmind,sigminm,sigmins,
@@ -712,7 +712,7 @@ c
         kb1(i) = min(kb1(i),kbm(i))
       enddo
 c
-!> - Search below index "kbm" and above kb1 for the level of maximum moist static energy.                         
+!> - Search below index "kbm" and above kb1 for the level of maximum moist static energy.
       do i=1,im
         hmax(i) = heo(i,kb1(i))
         kb(i) = kb1(i)
@@ -1736,8 +1736,8 @@ c
 !             aa2(i) = aa2(i) +
 !!   &                 dz1 * eta(i,k) * grav * fv *
 !    &                 dz1 * grav * fv *
-!    &                 max(val,(qeso(i,k) - qo(i,k)))        
-!NRL MNM: Limit overshooting not to be deeper than half the actual cloud              
+!    &                 max(val,(qeso(i,k) - qo(i,k)))
+!NRL MNM: Limit overshooting not to be deeper than half the actual cloud
               tem  = 0.5 * (zi(i,ktcon(i))-zi(i,kbcon(i)))
               tem1 = zi(i,k)-zi(i,ktcon(i))
               if(aa2(i) < 0. .or. tem1 >= tem) then
@@ -1944,7 +1944,7 @@ c
                endif
             enddo
          enddo
-      
+
 
       endif !if progsigma
 
@@ -2540,12 +2540,14 @@ c
               if(k == jmin(i)) then
                 dp = 1000. * del(i,k+1)
                 dellae(i,k+1,n) = dellae(i,k+1,n) -
-     &              edto(i)*etad(i,k) * tem1 * grav/dp
+     &              edto(i)*etad(i,k) *
+     &              merge(ecdo(i,k,n), tem1, n/=ntk) * grav/dp
               endif
               if(k == kb(i)) then
                 dp = 1000. * del(i,k)
                 dellae(i,k,n) = dellae(i,k,n) -
-     &              eta(i,k) * tem1 * grav/dp
+     &              eta(i,k) *
+     &              merge(ecko(i,k,n), tem1, n/=ntk) * grav/dp
               endif
 !
             endif
@@ -3002,7 +3004,7 @@ c
                enddo
             enddo
          endif
-         
+
          do k = 1,km
             do i = 1,im
                tmfq(i,k)=tmf(i,k,1)
@@ -3456,7 +3458,7 @@ c
         enddo
       enddo
 
-!LB:                                                                                                                                                                                                                                                  
+!LB:
       if(do_ca)then
          do i = 1,im
             rainevap(i)=delqev(i)
