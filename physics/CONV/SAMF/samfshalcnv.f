@@ -7,6 +7,11 @@
       use samfcnv_aerosols, only : samfshalcnv_aerosols
       use progsigma, only : progsigma_calc
       use progomega, only : progomega_calc
+      use samf_utils, only : samf_prepare_interfaces,                  &
+     &                       samf_compute_subcloud_tke,                 &
+     &                       samf_compute_subcloud_rh,                  &
+     &                       samf_scale_aware_func,                     &
+     &                       samf_proportional_mass_fixer
       contains
 
       subroutine samfshalcnv_init(imfshalcnv, imfshalcnv_samf,          &
@@ -259,6 +264,7 @@ c  cloud water
      & ten_v(:,:), ten_q(:,:,:), dqtr(:,:,:)
 
       real(kind=kind_phys) :: new_t1(im,km),new_u1(im,km),new_v1(im,km),&
+     & zo_cup(im,km),
      & new_q1(im,km), new_qtr(im,km,nn)
 
       ten_t = 0._kind_phys
@@ -309,6 +315,23 @@ c-----------------------------------------------------------------------
 !
 !************************************************************************
 !     convert input Pa terms to Cb terms  -- Moorthi
+      call samf_shal_preliminary()
+      call samf_shal_updraft_model(totflg)
+      if (totflg) return
+      call samf_shal_closure(totflg)
+      if (totflg) return
+      call samf_shal_feedback()
+
+      ten_t = (new_t1 - t1)/delt
+      ten_q(:,:,1) = (new_q1 - q1)/delt
+      ten_u = (new_u1 - u1)/delt
+      ten_v = (new_v1 - v1)/delt
+      dqtr  = (new_qtr - qtr)/delt
+
+      return
+
+      contains
+      subroutine samf_shal_preliminary()
 !>  ## Compute preliminary quantities needed for the static and feedback control portions of the algorithm.
 !>  - Convert input pressure terms to centibar units.
       ps   = psp   * 0.001
@@ -395,7 +418,8 @@ c
       do i=1,im
         totflg = totflg .and. (.not. cnvflg(i))
       enddo
-      if(totflg) return
+        totflg = .true.
+        return
 !!
 !>  - determine aerosol-aware rain conversion parameter over land
       do i=1,im
@@ -628,6 +652,10 @@ c
 c  determine level with largest moist static energy within pbl
 c  this is the level where updraft starts
 c
+      end subroutine samf_shal_preliminary
+      subroutine samf_shal_updraft_model(totflg)
+        logical, intent(out) :: totflg
+        totflg = .false.
 !> ## Perform calculations related to the updraft of the entraining/detraining cloud model ("static control").
 !> - Find the index for a level of sfclfac*hpbl which is initial guess for the parcel starting level.
       do i=1,im
@@ -750,7 +778,8 @@ c
       do i=1,im
         totflg = totflg .and. (.not. cnvflg(i))
       enddo
-      if(totflg) return
+        totflg = .true.
+        return
 !!
 !> - Determine the vertical pressure velocity at the LFC. After Han and Pan (2011) \cite han_and_pan_2011 , determine the maximum pressure thickness between a parcel's starting level and the LFC. If a parcel doesn't reach the LFC within the critical thickness, then the convective inhibition is deemed too great for convection to be triggered, and the subroutine returns to the calling routine without modifying the state variables.
       do i=1,im
@@ -803,7 +832,8 @@ c
       do i=1,im
         totflg = totflg .and. (.not. cnvflg(i))
       enddo
-      if(totflg) return
+        totflg = .true.
+        return
 !
 ! re-define kb & kbcon
 !
@@ -849,7 +879,8 @@ c
       do i=1,im
         totflg = totflg .and. (.not. cnvflg(i))
       enddo
-      if(totflg) return
+        totflg = .true.
+        return
 !!
       do i=1,im
         if(cnvflg(i)) then
@@ -860,26 +891,14 @@ c
 !
 !> - if the mean relative humidity in the subcloud layers is less than a threshold value (rhcrt), convection is not triggered.
 !
-      do i = 1, im
-        rhbar(i) = 0.
-        sumx(i) = 0.
-      enddo
-      do k = 1, km1
-        do i = 1, im
-          if (cnvflg(i)) then
-            if(k >= kb(i) .and. k < kbcon(i)) then
-              dz = zo(i,k+1) - zo(i,k)
-              rhbar(i) = rhbar(i) + rh(i,k) * dz
-              sumx(i) = sumx(i) + dz
-            endif
-          endif
-        enddo
-      enddo
+      call samf_compute_subcloud_rh(im, km, kb, kbcon, zo, rh, rhbar,   &
+     &                              cnvflg)
       do i= 1, im
         if(cnvflg(i)) then
-          rhbar(i) = rhbar(i) / sumx(i)
           if(rhbar(i) < rhcrt) then
             cnvflg(i) = .false.
+            totflg = .true.
+            return
           endif
         endif
       enddo
@@ -888,46 +907,20 @@ c
       do i=1,im
         totflg = totflg .and. (.not. cnvflg(i))
       enddo
-      if(totflg) return
+        totflg = .true.
+        return
 !!
 !
 ! turbulent entrainment rate assumed to be proportional
 !   to subcloud mean TKE
 !
-!c
-!c  specify the detrainment rate for the updrafts
-!c
-      if (hwrf_samfshal) then
-       do i = 1, im
-        if(cnvflg(i)) then
-          xlamud(i) = xlamue(i,kbcon(i))
-!         xlamud(i) = crtlamd
-        endif
-       enddo
-      else
-      if(ntk > 0) then
-        do i= 1, im
-          if(cnvflg(i)) then
-            sumx(i) = 0.
-            tkemean(i) = 0.
-          endif
-        enddo
+      if(.not. hwrf_samfshal .and. ntk > 0) then
 !
-        do k = 1, km1
-          do i = 1, im
-            if(cnvflg(i)) then
-              if(k >= kb(i) .and. k < kbcon(i)) then
-                dz = zo(i,k+1) - zo(i,k)
-                tkemean(i) = tkemean(i) + tkeh(i,k) * dz
-                sumx(i) = sumx(i) + dz
-              endif
-            endif
-          enddo
-        enddo
+        call samf_compute_subcloud_tke(im, km, kb, kbcon, zo, tkeh,     &
+     &                                 tkemean, cnvflg)
 !
         do i= 1, im
           if(cnvflg(i)) then
-             tkemean(i) = tkemean(i) / sumx(i)
              if(tkemean(i) > tkemx) then
                clamt(i) = clam + clamd
              else if(tkemean(i) < tkemn) then
@@ -1189,7 +1182,8 @@ c
       do i = 1, im
         totflg = totflg .and. (.not. cnvflg(i))
       enddo
-      if(totflg) return
+        totflg = .true.
+        return
 !!
 c
 c  calculate convective inhibition
@@ -1264,7 +1258,8 @@ c
       do i=1,im
         totflg = totflg .and. (.not. cnvflg(i))
       enddo
-      if(totflg) return
+        totflg = .true.
+        return
 !!
 c
 c  determine first guess cloud top as the level of zero buoyancy
@@ -1443,7 +1438,8 @@ c
       do i=1,im
         totflg = totflg .and. (.not. cnvflg(i))
       enddo
-      if(totflg) return
+        totflg = .true.
+        return
 !!
 c
 c  estimate the onvective overshooting as the level
@@ -1760,6 +1756,10 @@ c
 c--- what would the change be, that a cloud with unit mass
 c--- will do to the environment?
 c
+      end subroutine samf_shal_updraft_model
+      subroutine samf_shal_closure(totflg)
+        logical, intent(out) :: totflg
+        totflg = .false.
 !> ## Calculate the tendencies of the state variables (per unit cloud base mass flux) and the cloud base mass flux.
 !> - Calculate the change in moist static energy, moisture mixing ratio, and horizontal winds per unit cloud base mass flux for all layers below cloud top from equations B.14 and B.15 from Grell (1993) \cite grell_1993, and for the cloud top from B.16 and B.17.
       do k = 1, km
@@ -2093,31 +2093,13 @@ c
         endif
       enddo
 !
-!> - For scale-aware parameterization, the updraft fraction (sigmagfm) is first computed as a function of the lateral entrainment rate at cloud base (see Han et al.'s (2017) \cite han_et_al_2017 equation 4 and 5), following the study by Grell and Freitas (2014) \cite grell_and_freitas_2014.
+!> - For scale-aware parameterization, the updraft fraction (sigmagfm) is first computed as a function of the lateral entrainment rate at cloud base (see Han et al.'s (2017) \\cite han_et_al_2017 equation 4 and 5), following the study by Grell and Freitas (2014) \\cite grell_and_freitas_2014.
+!> - Then, calculate the reduction factor (scaldfunc) of the vertical convective eddy transport of mass flux as a function of updraft fraction from the studies by Arakawa and Wu (2013) \\cite arakawa_and_wu_2013 (also see Han et al.'s (2017) \\cite han_et_al_2017 equation 1 and 2). The final cloud base mass flux with scale-aware parameterization is obtained from the mass flux when sigmagfm << 1, multiplied by the reduction factor (Han et al.'s (2017) \\cite han_et_al_2017 equation 2).
+      call samf_scale_aware_func(im, km, garea, xlamue, kbcon, cnvflg,  &
+     &                           dxcrt, sigmab, progsigma,            &
+     &                           sigmagfm, scaldfunc)
       do i = 1, im
         if(cnvflg(i)) then
-          tem = min(max(xlamue(i,kbcon(i)), 2.e-4), 6.e-4)
-          tem = 0.2 / tem
-          tem1 = 3.14 * tem * tem
-          sigmagfm(i) = tem1 / garea(i)
-          sigmagfm(i) = max(sigmagfm(i), 0.001)
-          sigmagfm(i) = min(sigmagfm(i), 0.999)
-        endif
-      enddo
-!
-!> - Then, calculate the reduction factor (scaldfunc) of the vertical convective eddy transport of mass flux as a function of updraft fraction from the studies by Arakawa and Wu (2013) \cite arakawa_and_wu_2013 (also see Han et al.'s (2017) \cite han_et_al_2017 equation 1 and 2). The final cloud base mass flux with scale-aware parameterization is obtained from the mass flux when sigmagfm << 1, multiplied by the reduction factor (Han et al.'s (2017) \cite han_et_al_2017 equation 2).
-      do i = 1, im
-        if(cnvflg(i)) then
-          if (gdx(i) < dxcrt) then
-             if(progsigma)then
-                scaldfunc(i)=(1.-sigmab(i))*(1.-sigmab(i))
-             else
-                scaldfunc(i) = (1.-sigmagfm(i)) * (1.-sigmagfm(i))
-             endif
-             scaldfunc(i) = max(min(scaldfunc(i), 1.0), 0.)
-          else
-            scaldfunc(i) = 1.0
-          endif
           xmb(i) = xmb(i) * scaldfunc(i)
           xmb(i) = min(xmb(i),xmbmax(i))
         endif
@@ -2135,6 +2117,8 @@ c
 !    &  qtr, qaero)
 !     endif
 !
+      end subroutine samf_shal_closure
+      subroutine samf_shal_feedback()
 !> ## For the "feedback control", calculate updated values of the state variables by multiplying the cloud base mass flux and the tendencies calculated per unit cloud base mass flux from the static control.
 !! - Recalculate saturation specific humidity.
 c
@@ -2195,54 +2179,10 @@ c
       enddo
 !
 ! Negative moisture is set to zero after borrowing it from
-!   positive values within the mass-flux transport layers
+!  positive values within the mass-flux transport layers
 !
-      do i = 1,im
-        tsumn(i) = 0.
-        tsump(i) = 0.
-        rtnp(i) = 1.
-      enddo
-      do k = 1,km1
-        do i = 1,im
-          if (cnvflg(i)) then
-            if(k > kb(i) .and. k <= ktcon(i)) then
-              tem = new_q1(i,k) * delp(i,k) / grav
-              if(new_q1(i,k) < 0.) tsumn(i) = tsumn(i) + tem
-              if(new_q1(i,k) > 0.) tsump(i) = tsump(i) + tem
-            endif
-          endif
-        enddo
-      enddo
-      do i = 1,im
-        if(cnvflg(i)) then
-          if(tsump(i) > 0. .and. tsumn(i) < 0.) then
-            if(tsump(i) > abs(tsumn(i))) then
-              rtnp(i) = tsumn(i) / tsump(i)
-            else
-              rtnp(i) = tsump(i) / tsumn(i)
-            endif
-          endif
-        endif
-      enddo
-      do k = 1,km1
-        do i = 1,im
-          if (cnvflg(i)) then
-            if(k > kb(i) .and. k <= ktcon(i)) then
-              if(rtnp(i) < 0.) then
-                if(tsump(i) > abs(tsumn(i))) then
-                  if(new_q1(i,k) < 0.) new_q1(i,k)= 0.
-                  if(new_q1(i,k) > 0.) new_q1(i,k)=                     &
-     &                                       (1.+rtnp(i))*new_q1(i,k)
-                else
-                  if(new_q1(i,k) < 0.) new_q1(i,k)=                     &
-     &                                       (1.+rtnp(i))*new_q1(i,k)
-                  if(new_q1(i,k) > 0.) new_q1(i,k)=0.
-                endif
-              endif
-            endif
-          endif
-        enddo
-      enddo
+      call samf_proportional_mass_fixer(im, km, cnvflg, ktcon,          &
+     &                                  delp / grav, new_q1)
 !
       if (.not.hwrf_samfshal) then
 !
@@ -2264,59 +2204,22 @@ c
 ! Negative TKE, ozone, and aerosols are set to zero after borrowing them
 !     from positive values within the mass-flux transport layers
 !
-        do i = 1,im
-          tsumn(i) = 0.
-          tsump(i) = 0.
-          rtnp(i) = 1.
-        enddo
-        do k = 1,km1
-          do i = 1,im
-            if (cnvflg(i)) then
-              if(k > kb(i) .and. k <= ktcon(i)) then
-                if(n == indx) then
-                  if(k > 1) then
-                    dz = zi(i,k) - zi(i,k-1)
-                  else
-                    dz = zi(i,k)
-                  endif
-                  tem = ctr(i,k,n) * dz
-                else
-                  tem = ctr(i,k,n) * delp(i,k) / grav
-                endif
-                if(ctr(i,k,n) < 0.) tsumn(i) = tsumn(i) + tem
-                if(ctr(i,k,n) > 0.) tsump(i) = tsump(i) + tem
-              endif
-            endif
-          enddo
-        enddo
-        do i = 1,im
-          if(cnvflg(i)) then
-            if(tsump(i) > 0. .and. tsumn(i) < 0.) then
-              if(tsump(i) > abs(tsumn(i))) then
-                rtnp(i) = tsumn(i) / tsump(i)
+        if (n == indx) then
+          do i = 1, im
+            do k = 1, km
+              if (k > 1) then
+                zo_cup(i, k) = zi(i, k) - zi(i, k-1)
               else
-                rtnp(i) = tsump(i) / tsumn(i)
+                zo_cup(i, k) = zi(i, k)
               endif
-            endif
-          endif
-        enddo
-        do k = 1,km1
-        do i = 1,im
-          if (cnvflg(i)) then
-            if(k > kb(i) .and. k <= ktcon(i)) then
-              if(rtnp(i) < 0.) then
-                if(tsump(i) > abs(tsumn(i))) then
-                  if(ctr(i,k,n)<0.) ctr(i,k,n)=0.
-                  if(ctr(i,k,n)>0.) ctr(i,k,n)=(1.+rtnp(i))*ctr(i,k,n)
-                else
-                  if(ctr(i,k,n)<0.) ctr(i,k,n)=(1.+rtnp(i))*ctr(i,k,n)
-                  if(ctr(i,k,n)>0.) ctr(i,k,n)=0.
-                endif
-              endif
-            endif
-          endif
-        enddo
-        enddo
+            enddo
+          enddo
+          call samf_proportional_mass_fixer(im, km, cnvflg, ktcon,       &
+     &                                      zo_cup, ctr(:, :, n))
+        else
+          call samf_proportional_mass_fixer(im, km, cnvflg, ktcon,       &
+     &                                      delp / grav, ctr(:, :, n))
+        endif
 !
         kk = n+2
         do k = 1, km
@@ -2618,6 +2521,7 @@ c
       dqtr  = (new_qtr - qtr)/delt
 
       return
+      end subroutine samf_shal_feedback
       end subroutine samfshalcnv_run
 !> @}
       end module samfshalcnv
