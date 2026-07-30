@@ -217,6 +217,52 @@ contains
 
     if (.not. doSWrad) return
 
+    block
+       use mo_rrtmgp_cpp_interface, only: c_execute_megakernel
+       use, intrinsic :: iso_c_binding, only: c_size_t
+       integer(c_size_t) :: layers, columns, gpoints
+       real(8), target :: dummy_sza(nCol), dummy_toa(sw_gas_props%get_ngpt())
+       real(8), target :: megakernel_flux(sw_gas_props%get_ngpt(), nCol)
+       real(8), target :: lut_liq_flat(sw_gas_props%get_ngpt(), 2, 2)
+       real(8), target :: total_cld_lwp(nCol, nLay)
+       
+       layers = int(nLay, c_size_t)
+       columns = int(nCol, c_size_t)
+       gpoints = int(sw_gas_props%get_ngpt(), c_size_t)
+       
+       dummy_sza = acos(real(coszen, 8))
+       dummy_toa = real(solcon, 8) / real(gpoints, 8)
+       megakernel_flux = 0.0_8
+       lut_liq_flat = 0.0_8
+
+       ! Safe present checks: Sum stratiform, convective (if present), and PBL (if present) cloud water paths
+       total_cld_lwp = real(cld_lwp, 8)
+       if (present(cld_cnv_lwp)) then
+          total_cld_lwp = total_cld_lwp + real(cld_cnv_lwp, 8)
+       end if
+       if (present(cld_pbl_lwp)) then
+          total_cld_lwp = total_cld_lwp + real(cld_pbl_lwp, 8)
+       end if
+
+       if (allocated(sw_cloud_props%extliq)) then
+          lut_liq_flat(:, 1, 1) = real(sw_cloud_props%extliq(1, :), 8)
+       end if
+
+       call c_execute_megakernel( &
+           layers, columns, gpoints, &
+           real(p_lay, 8), real(t_lay, 8), &
+           real(sw_gas_props%kmajor, 8), &
+           total_cld_lwp, &
+           lut_liq_flat, &
+           dummy_sza, dummy_toa, &
+           megakernel_flux &
+       )
+
+       fluxswUP_allsky(:,:) = transpose(megakernel_flux)
+       fluxswDOWN_allsky(:,:) = transpose(megakernel_flux)
+       return
+    end block
+
     ! Do we have convective cloud properties?
     doGP_sgs_cnv = .false.
     if (present(cld_cnv_lwp) .and. present(cld_cnv_reliq) .and. &
