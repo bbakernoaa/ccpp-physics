@@ -1,0 +1,32 @@
+# Thompson C++ Core test suite
+cmake_minimum_required(VERSION 3.18)
+
+add_executable(test_lifecycle test_lifecycle.cpp)
+target_include_directories(test_lifecycle PRIVATE ..)
+target_link_libraries(test_lifecycle PRIVATE ccpp_physics)
+add_test(NAME test_lifecycle COMMAND test_lifecycle)
+
+add_executable(test_thompson_cpp_regression test_thompson_cpp_regression.cpp)
+target_include_directories(test_thompson_cpp_regression PRIVATE ..)
+target_link_libraries(test_thompson_cpp_regression PRIVATE ccpp_physics)
+add_test(NAME test_thompson_cpp_regression COMMAND test_thompson_cpp_regression)
+
+add_executable(test_mdspan_strides test_mdspan_strides.cpp)
+target_include_directories(test_mdspan_strides PRIVATE ..)
+target_link_libraries(test_mdspan_strides PRIVATE ccpp_physics)
+add_test(NAME test_mdspan_strides COMMAND test_mdspan_strides)
+
+add_executable(test_math_precision test_math_precision.cpp)
+target_include_directories(test_math_precision PRIVATE ..)
+target_link_libraries(test_math_precision PRIVATE ccpp_physics)
+add_test(NAME test_math_precision COMMAND test_math_precision)
+
+add_executable(benchmark_thompson_cpp benchmark_thompson_cpp.cpp)
+target_include_directories(benchmark_thompson_cpp PRIVATE ..)
+target_link_libraries(benchmark_thompson_cpp PRIVATE ccpp_physics)
+add_test(NAME benchmark_thompson_cpp COMMAND benchmark_thompson_cpp)
+
+add_executable(test_fuzzer_benchmark test_fuzzer_benchmark.F90)
+target_include_directories(test_fuzzer_benchmark PRIVATE ..)
+target_link_libraries(test_fuzzer_benchmark PRIVATE ccpp_physics)
+add_test(NAME test_fuzzer_benchmark COMMAND test_fuzzer_benchmark)

@@ -4,7 +4,13 @@ project(ccpp_physics
         VERSION 5.0.0
         LANGUAGES Fortran CXX)
 
-set(CMAKE_CXX_STANDARD 17)
+option(ENABLE_THOMPSON_CPP "Enable modern C++23 Thompson Microphysics refactor" OFF)
+if(ENABLE_THOMPSON_CPP)
+    set(CMAKE_CXX_STANDARD 23)
+    add_compile_definitions(ENABLE_THOMPSON_CPP)
+else()
+    set(CMAKE_CXX_STANDARD 17)
+endif()
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
@@ -223,6 +229,12 @@ if(ENABLE_KOKKOS)
     add_compile_definitions(ENABLE_KOKKOS)
 endif()
 
+if(ENABLE_THOMPSON_CPP)
+    list(APPEND SCHEMES_CPP 
+         physics/MP/Thompson/cpp_core/mo_thompson_cpp_interface.F90
+         physics/MP/Thompson/cpp_core/thompson_microphysics.cpp)
+endif()
+
 add_library(ccpp_physics STATIC ${SCHEMES} ${SCHEMES_RTERRTMGP} ${SCHEMES_OPENMP_OFF} ${SCHEMES_DYNAMICS} ${CAPS} ${SCHEMES_CPP})
 
 set_target_properties(ccpp_physics PROPERTIES VERSION ${PROJECT_VERSION}
@@ -233,6 +245,12 @@ target_include_directories(ccpp_physics PUBLIC
   $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/physics/Radiation/RRTMGP/rte-rrtmgp/cpp/include>
 )
+
+if(ENABLE_THOMPSON_CPP)
+  target_include_directories(ccpp_physics PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/physics/MP/Thompson/cpp_core>
+  )
+endif()
 
 target_link_libraries(ccpp_physics PRIVATE MPI::MPI_Fortran)
 if(ENABLE_KOKKOS)
@@ -250,6 +268,10 @@ endif()
 #add FMS for FV3 only
 if(FV3 OR MPAS)
   target_link_libraries(ccpp_physics PUBLIC fms)
+endif()
+
+if(ENABLE_THOMPSON_CPP)
+  add_subdirectory(physics/MP/Thompson/cpp_core/tests)
 endif()
 
 # Define where to install the library
