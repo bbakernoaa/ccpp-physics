@@ -86,7 +86,11 @@
 !! -# A mass-flux approach is also used to represent the stratocumulus-top-induced turbulence
 !! (mfscuq.f).
 !! \section detail_satmedmfvidfq GFS satmedmfvdifq Detailed Algorithm
+#ifdef TESTING_PARITY
+      subroutine satmedmfvdifq_run_fortran(im,km,ntrac,ntcw,ntrw,               &
+#else
       subroutine satmedmfvdifq_run(im,km,ntrac,ntcw,ntrw,               &
+#endif
      &     ntiw,ntke,grav,pi,rd,cp,rv,hvap,hfus,fv,eps,epsm1,              &
 !The following three variables are for SA-3D-TKE
      &     def_1,def_2,def_3,sa3dtke,dku3d_h,dku3d_e,                   &
@@ -107,6 +111,10 @@
 !
       use machine  , only : kind_phys
       use funcphys , only : fpvs
+#ifdef ENABLE_SATMEDMF_CPP
+      use, intrinsic :: iso_c_binding, only : c_size_t, c_double, c_int
+      use mo_satmedmf_cpp_interface, only : c_satmedmf_run
+#endif
 !
       implicit none
 !
@@ -182,6 +190,11 @@
 !----------------------------------------------------------------------
 !***
 !***  local variables
+#ifdef ENABLE_SATMEDMF_CPP
+      integer(c_size_t) :: km_c, im_c
+      real(c_double) :: delt_c
+      integer(c_int) :: tte_c, canopy_c
+#endif
       real(kind=kind_phys) spd1_m
 !***
       integer i,is,k,n,ndt,km1,kmpbl,kmscu,ntrac1,idtend
@@ -415,6 +428,19 @@
 ! Initialize CCPP error handling variables
       errmsg = ''
       errflg = 0
+
+#if defined(ENABLE_SATMEDMF_CPP) && !defined(TESTING_PARITY)
+      km_c = km
+      im_c = im
+      delt_c = delt
+      tte_c = merge(1, 0, tte_edmf)
+      canopy_c = merge(1, 0, do_canopy)
+      call c_satmedmf_run(km_c, im_c, delt_c, tte_c,                    &
+     &     t1, prsl, prsl, u1, v1, q1(:,:,1), rtg(:,:,1),               &
+     &     heat, evap, stress, canopy_c, cfch,                          &
+     &     dkt, dkt, dkt, dkt)
+      return
+#endif
 
 !> ## Compute preliminary variables from input arguments
       dt2  = delt
@@ -3077,8 +3103,14 @@ c
         if(allocated(EDDYVESTX)) deallocate(EDDYVESTX)
         if(allocated(ZCANX)) deallocate(ZCANX)
       endif
+#endif
       
       return
+
+#ifdef TESTING_PARITY
+      end subroutine satmedmfvdifq_run_fortran
+#else
       end subroutine satmedmfvdifq_run
+#endif
 !> @}
       end module satmedmfvdifq

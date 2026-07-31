@@ -5,11 +5,17 @@ project(ccpp_physics
         LANGUAGES Fortran CXX)
 
 option(ENABLE_THOMPSON_CPP "Enable modern C++23 Thompson Microphysics refactor" OFF)
-if(ENABLE_THOMPSON_CPP)
+option(ENABLE_SATMEDMF_CPP "Enable modern C++23 SATMEDMF PBL port" OFF)
+if(ENABLE_THOMPSON_CPP OR ENABLE_SATMEDMF_CPP)
     set(CMAKE_CXX_STANDARD 23)
-    add_compile_definitions(ENABLE_THOMPSON_CPP)
 else()
     set(CMAKE_CXX_STANDARD 17)
+endif()
+if(ENABLE_THOMPSON_CPP)
+    add_compile_definitions(ENABLE_THOMPSON_CPP)
+endif()
+if(ENABLE_SATMEDMF_CPP)
+    add_compile_definitions(ENABLE_SATMEDMF_CPP)
 endif()
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -235,6 +241,12 @@ if(ENABLE_THOMPSON_CPP)
          physics/MP/Thompson/cpp_core/thompson_microphysics.cpp)
 endif()
 
+if(ENABLE_SATMEDMF_CPP)
+    list(APPEND SCHEMES_CPP 
+         physics/PBL/SATMEDMF/cpp_core/mo_satmedmf_cpp_interface.F90
+         physics/PBL/SATMEDMF/cpp_core/satmedmf_vdifq.cpp)
+endif()
+
 add_library(ccpp_physics STATIC ${SCHEMES} ${SCHEMES_RTERRTMGP} ${SCHEMES_OPENMP_OFF} ${SCHEMES_DYNAMICS} ${CAPS} ${SCHEMES_CPP})
 
 set_target_properties(ccpp_physics PROPERTIES VERSION ${PROJECT_VERSION}
@@ -249,6 +261,12 @@ target_include_directories(ccpp_physics PUBLIC
 if(ENABLE_THOMPSON_CPP)
   target_include_directories(ccpp_physics PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/physics/MP/Thompson/cpp_core>
+  )
+endif()
+
+if(ENABLE_SATMEDMF_CPP)
+  target_include_directories(ccpp_physics PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/physics/PBL/SATMEDMF/cpp_core>
   )
 endif()
 
@@ -272,6 +290,10 @@ endif()
 
 if(ENABLE_THOMPSON_CPP)
   add_subdirectory(physics/MP/Thompson/cpp_core/tests)
+endif()
+
+if(ENABLE_SATMEDMF_CPP)
+  add_subdirectory(physics/PBL/SATMEDMF/cpp_core/tests)
 endif()
 
 # Define where to install the library
