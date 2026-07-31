@@ -228,3 +228,6 @@ vgcore.*
 specs/
 .specify/
 .gemini/
+
+# Build
+build*/
