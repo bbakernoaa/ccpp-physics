@@ -8,6 +8,10 @@
 #include <algorithm>
 #include "thompson_math_utils.hpp"
 
+#ifdef ENABLE_KOKKOS
+#include <Kokkos_Core.hpp>
+#endif
+
 namespace thompson {
 
 // Modern C++23 mdspan Column-Major LayoutLeft aliases matching Fortran array strides
@@ -17,13 +21,25 @@ using ConstView2D = std::mdspan<const double, std::extents<size_t, std::dynamic_
 /**
  * 1. Subroutine: qi_aut_qs (Ice Autoconversion to Snow)
  * Direct mathematical translation of ice crystals aggregation into snow.
+ * Optionally refactored using cubic Hermite polynomials to smoothly blend phase boundaries
+ * and ice threshold concentrations, preventing numerical step-shocks.
  */
 inline void qi_aut_qs(double temp, double qi_val, double& qi_to_qs_rate) {
     qi_to_qs_rate = 0.0;
+#ifdef ENABLE_HERMITE_BLENDING
+    // Smoothly blend temperature threshold near freezing (between 273.15 K and 271.15 K)
+    double t_blend = hermite_blend(temp, 273.15, 271.15);
+    // Smoothly blend ice mass concentration threshold (between 1e-6 and 1e-5)
+    double m_blend = hermite_blend(qi_val, 1e-6, 1e-5);
+    
+    double base_rate = 1e-3 * std::max(0.0, 1.0 - (273.15 - temp) / 40.0);
+    qi_to_qs_rate = t_blend * m_blend * base_rate;
+#else
     if (temp < 273.15 && qi_val > 1e-5) {
         // Temperature-dependent autoconversion rate
         qi_to_qs_rate = 1e-3 * std::max(0.0, 1.0 - (273.15 - temp) / 40.0);
     }
+#endif
 }
 
 /**
@@ -52,14 +68,25 @@ inline void qr_acr_qs(double temp, double qr_val, double qs_val, double& qr_to_q
 /**
  * 4. Subroutine: freezeH2O (Heterogeneous Freezing of Water)
  * Direct mathematical translation of liquid water droplets freezing on nuclei.
+ * Optionally refactored utilizing Hermite polynomial smooth boundary transitions.
  */
 inline void freezeH2O(double temp, double qc_val, double& qc_freeze_rate) {
     qc_freeze_rate = 0.0;
+#ifdef ENABLE_HERMITE_BLENDING
+    // Smoothly blend freezing onset temperature (between -3C/270.15K and -5C/268.15K)
+    double t_blend = hermite_blend(temp, 270.15, 268.15);
+    // Smoothly blend cloud liquid threshold (between 0.0 and 1e-6)
+    double m_blend = hermite_blend(qc_val, 0.0, 1e-6);
+    
+    double supercooling = 273.15 - temp;
+    qc_freeze_rate = t_blend * m_blend * 1e-6 * qc_val * std::exp(0.6 * supercooling);
+#else
     if (temp < 268.15 && qc_val > 0.0) {
         // Freezing rate increases exponentially below -5C
         double supercooling = 273.15 - temp;
         qc_freeze_rate = 1e-6 * qc_val * std::exp(0.6 * supercooling);
     }
+#endif
 }
 
 /**
@@ -148,6 +175,8 @@ inline void calc_refl10cm(
  * Optimized utilizing standard hardware-level double square-root (std::sqrt(std::sqrt(...)))
  * instead of transcendental general power (std::pow(..., 0.25)) function, yielding
  * absolute, bit-wise numerical identity mapping to Fortran's **0.25.
+ * 
+ * Supports both CPU OpenMP loops and GPU Kokkos kernels natively.
  */
 inline void semi_lagrange_sedim(
     size_t layers,
@@ -157,6 +186,30 @@ inline void semi_lagrange_sedim(
     View2D q_species,
     double* surface_precip_rate
 ) {
+#ifdef ENABLE_KOKKOS
+    // Performance-portable Kokkos execution space kernel
+    Kokkos::parallel_for("semi_lagrange_sedim_kokkos", columns, KOKKOS_LAMBDA(const size_t col) {
+        double accumulated_precip = 0.0;
+        for (size_t lay = 0; lay < layers; ++lay) {
+            double air_density = rho[col, lay];
+            double val = q_species[col, lay];
+            if (val > 0.0) {
+                double fall_velocity = 2.0 * std::sqrt(std::sqrt(val * air_density));
+                double fall_distance = fall_velocity * dt;
+                double settled_fraction = (fall_distance < 100.0) ? (fall_distance / 100.0) : 1.0;
+                double fall_mass = val * settled_fraction;
+                q_species[col, lay] -= fall_mass;
+                if (lay == 0) {
+                    accumulated_precip += fall_mass * air_density;
+                } else {
+                    q_species[col, lay - 1] += fall_mass;
+                }
+            }
+        }
+        surface_precip_rate[col] = accumulated_precip / dt;
+    });
+#else
+    // Standard OpenMP parallel loop (optimized for standard multithreaded CPU)
     #pragma omp parallel for schedule(static)
     for (size_t col = 0; col < columns; ++col) {
         double accumulated_precip = 0.0;
@@ -185,11 +238,14 @@ inline void semi_lagrange_sedim(
         }
         surface_precip_rate[col] = accumulated_precip / dt;
     }
+#endif
 }
 
 /**
  * 8. Subroutine: mp_gt_driver / mp_thompson
  * Main multi-phase solver integrating all individual translated physical equations.
+ * 
+ * Supports both CPU OpenMP tiled loops and portable Kokkos CPU/GPU kernels natively.
  */
 inline void thompson_microphysics_run_core(
     size_t layers,
@@ -210,7 +266,88 @@ inline void thompson_microphysics_run_core(
     View2D ng,
     double* precip
 ) {
-    // Cache-Friendly Loop Tiling: block columns in sizes of 64 to fit cleanly in CPU cache
+#ifdef ENABLE_KOKKOS
+    // Performance-portable Kokkos execution space kernel for CPU/GPU runs
+    Kokkos::parallel_for("thompson_microphysics_kokkos", columns, KOKKOS_LAMBDA(const size_t col) {
+        for (size_t lay = 0; lay < layers; ++lay) {
+            double temp = t_lay[col, lay];
+            double press = p_lay[col, lay];
+            double air_density = rho[col, lay];
+            
+            double q_vapor = qv[col, lay];
+            double q_cloud = qc[col, lay];
+            
+#ifdef ENABLE_FAST_EXP
+            double es = 611.2 * thompson::fast_exp(17.67 * (temp - 273.15) / (temp - 29.65));
+#else
+            double es = 611.2 * std::exp(17.67 * (temp - 273.15) / (temp - 29.65));
+#endif
+            double qvs = 0.622 * es / (press - 0.378 * es);
+            
+            double diff = q_vapor - qvs;
+            if (diff > 0.0) {
+                double cond = (diff < q_vapor) ? diff : q_vapor;
+                qv[col, lay] -= cond;
+                qc[col, lay] += cond;
+                t_lay[col, lay] += cond * 2.5e6 / 1004.0;
+            } else if (diff < 0.0 && q_cloud > 0.0) {
+                double evap = (-diff < q_cloud) ? -diff : q_cloud;
+                qv[col, lay] += evap;
+                qc[col, lay] -= evap;
+                t_lay[col, lay] -= evap * 2.5e6 / 1004.0;
+            }
+
+            double q_ice = qi[col, lay];
+            double q_rain = qr[col, lay];
+            double q_snow = qs[col, lay];
+            double q_graupel = qg[col, lay];
+
+            double qc_freeze_rate = 0.0;
+            if (temp < 268.15 && qc[col, lay] > 0.0) {
+                qc_freeze_rate = 1e-6 * qc[col, lay] * std::exp(0.6 * (273.15 - temp));
+            }
+            if (qc_freeze_rate > 0.0) {
+                double qc_freeze = (qc[col, lay] < qc_freeze_rate * dt) ? qc[col, lay] : qc_freeze_rate * dt;
+                qc[col, lay] -= qc_freeze;
+                qi[col, lay] += qc_freeze;
+                t_lay[col, lay] += qc_freeze * 3.33e5 / 1004.0;
+            }
+
+            double qi_to_qs_rate = 0.0;
+            if (temp < 273.15 && qi[col, lay] > 1e-5) {
+                qi_to_qs_rate = 1e-3 * std::max(0.0, 1.0 - (273.15 - temp) / 40.0);
+            }
+            if (qi_to_qs_rate > 0.0) {
+                double qi_aut = (qi[col, lay] < qi_to_qs_rate * dt) ? qi[col, lay] : qi_to_qs_rate * dt;
+                qi[col, lay] -= qi_aut;
+                qs[col, lay] += qi_aut;
+            }
+
+            double qr_to_qg_rate = 0.0;
+            if (temp < 273.15 && qr[col, lay] > 0.0 && qg[col, lay] > 0.0) {
+                qr_to_qg_rate = 0.05 * qr[col, lay] * qg[col, lay];
+            }
+            if (qr_to_qg_rate > 0.0) {
+                double qr_acrg = (qr[col, lay] < qr_to_qg_rate * dt) ? qr[col, lay] : qr_to_qg_rate * dt;
+                qr[col, lay] -= qr_acrg;
+                qg[col, lay] += qr_acrg;
+                t_lay[col, lay] += qr_acrg * 3.33e5 / 1004.0;
+            }
+
+            double qr_to_qs_rate = 0.0;
+            if (temp < 273.15 && qr[col, lay] > 0.0 && qs[col, lay] > 0.0) {
+                qr_to_qs_rate = 0.02 * qr[col, lay] * qs[col, lay];
+            }
+            if (qr_to_qs_rate > 0.0) {
+                double qr_acrs = (qr[col, lay] < qr_to_qs_rate * dt) ? qr[col, lay] : qr_to_qs_rate * dt;
+                qr[col, lay] -= qr_acrs;
+                qs[col, lay] += qr_acrs;
+                t_lay[col, lay] += qr_acrs * 3.33e5 / 1004.0;
+            }
+        }
+    });
+#else
+    // Cache-Friendly Loop Tiling (optimized for CPU with column-level blocking of size 64)
     const size_t tile_size = 64;
 
     #pragma omp parallel for schedule(static)
@@ -298,6 +435,7 @@ inline void thompson_microphysics_run_core(
             }
         }
     }
+#endif
 
     // E. Standalone Sedimentations (semi_lagrange_sedim)
     std::vector<double> surf_rain_rate(columns, 0.0);
