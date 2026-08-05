@@ -1,0 +1,17 @@
+# SAMF C++ Core test suite
+cmake_minimum_required(VERSION 3.18)
+
+add_executable(test_samf_deep_parity test_samf_deep_parity.F90)
+target_include_directories(test_samf_deep_parity PRIVATE ..)
+target_link_libraries(test_samf_deep_parity PRIVATE ccpp_physics)
+add_test(NAME test_samf_deep_parity COMMAND test_samf_deep_parity)
+
+add_executable(test_samf_shallow_parity test_samf_shallow_parity.F90)
+target_include_directories(test_samf_shallow_parity PRIVATE ..)
+target_link_libraries(test_samf_shallow_parity PRIVATE ccpp_physics)
+add_test(NAME test_samf_shallow_parity COMMAND test_samf_shallow_parity)
+
+add_executable(benchmark_samf_convection benchmark_samf_convection.cpp)
+target_include_directories(benchmark_samf_convection PRIVATE ..)
+target_link_libraries(benchmark_samf_convection PRIVATE ccpp_physics)
+add_test(NAME benchmark_samf_convection COMMAND benchmark_samf_convection)

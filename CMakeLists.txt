@@ -6,7 +6,13 @@ project(ccpp_physics
 
 option(ENABLE_THOMPSON_CPP "Enable modern C++23 Thompson Microphysics refactor" OFF)
 option(ENABLE_SATMEDMF_CPP "Enable modern C++23 SATMEDMF PBL port" OFF)
-if(ENABLE_THOMPSON_CPP OR ENABLE_SATMEDMF_CPP)
+option(ENABLE_SAMF_CPP "Enable modern C++23 GFS SAMF Convection port" OFF)
+option(ENABLE_GWD_CPP "Enable modern C++23 GFS GWD and diagnostics port" OFF)
+option(ENABLE_RADIATION_CPP "Enable modern C++23 RRTMG Radiation port" OFF)
+option(ENABLE_SURFACE_CPP "Enable modern C++23 GFS Surface Layer and models port" OFF)
+option(ENABLE_PHOTOCHEM_CPP "Enable modern C++23 GFS Photochemistry port" OFF)
+option(ENABLE_NOAHMP_CPP "Enable modern C++23 GFS Noah-MP LSM driver port" OFF)
+if(ENABLE_THOMPSON_CPP OR ENABLE_SATMEDMF_CPP OR ENABLE_SAMF_CPP OR ENABLE_GWD_CPP OR ENABLE_RADIATION_CPP OR ENABLE_SURFACE_CPP OR ENABLE_PHOTOCHEM_CPP OR ENABLE_NOAHMP_CPP)
     set(CMAKE_CXX_STANDARD 23)
 else()
     set(CMAKE_CXX_STANDARD 17)
@@ -16,6 +22,24 @@ if(ENABLE_THOMPSON_CPP)
 endif()
 if(ENABLE_SATMEDMF_CPP)
     add_compile_definitions(ENABLE_SATMEDMF_CPP)
+endif()
+if(ENABLE_SAMF_CPP)
+    add_compile_definitions(ENABLE_SAMF_CPP)
+endif()
+if(ENABLE_GWD_CPP)
+    add_compile_definitions(ENABLE_GWD_CPP)
+endif()
+if(ENABLE_RADIATION_CPP)
+    add_compile_definitions(ENABLE_RADIATION_CPP)
+endif()
+if(ENABLE_SURFACE_CPP)
+    add_compile_definitions(ENABLE_SURFACE_CPP)
+endif()
+if(ENABLE_PHOTOCHEM_CPP)
+    add_compile_definitions(ENABLE_PHOTOCHEM_CPP)
+endif()
+if(ENABLE_NOAHMP_CPP)
+    add_compile_definitions(ENABLE_NOAHMP_CPP)
 endif()
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -247,6 +271,46 @@ if(ENABLE_SATMEDMF_CPP)
          physics/PBL/SATMEDMF/cpp_core/satmedmf_vdifq.cpp)
 endif()
 
+if(ENABLE_SAMF_CPP)
+    list(APPEND SCHEMES_CPP 
+         physics/CONV/SAMF/cpp_core/mo_samf_cpp_interface.F90
+         physics/CONV/SAMF/cpp_core/samf_deep_convection.cpp
+         physics/CONV/SAMF/cpp_core/samf_shallow_convection.cpp)
+endif()
+
+if(ENABLE_GWD_CPP)
+    list(APPEND SCHEMES_CPP 
+         physics/GWD/cpp_core/mo_gwd_cpp_interface.F90
+         physics/GWD/cpp_core/ugwpv1_gsldrag.cpp)
+endif()
+
+if(ENABLE_RADIATION_CPP)
+    list(APPEND SCHEMES_CPP 
+         physics/Radiation/RRTMG/cpp_core/mo_radiation_cpp_interface.F90
+         physics/Radiation/RRTMG/cpp_core/rrtmg_sw_radiation.cpp
+         physics/Radiation/RRTMG/cpp_core/rrtmg_lw_radiation.cpp)
+endif()
+
+if(ENABLE_SURFACE_CPP)
+    list(APPEND SCHEMES_CPP 
+         physics/SFC_Layer/UFS/cpp_core/mo_surface_cpp_interface.F90
+         physics/SFC_Layer/UFS/cpp_core/sfc_diff.cpp
+         physics/SFC_Layer/UFS/cpp_core/sfc_nst.cpp)
+endif()
+
+if(ENABLE_PHOTOCHEM_CPP)
+    list(APPEND SCHEMES_CPP 
+         physics/photochem/cpp_core/mo_photochem_cpp_interface.F90
+         physics/photochem/cpp_core/ozphys.cpp
+         physics/photochem/cpp_core/h2ophys.cpp)
+endif()
+
+if(ENABLE_NOAHMP_CPP)
+    list(APPEND SCHEMES_CPP 
+         physics/SFC_Models/Land/Noahmp/cpp_core/mo_noahmp_cpp_interface.F90
+         physics/SFC_Models/Land/Noahmp/cpp_core/noahmpdrv.cpp)
+endif()
+
 add_library(ccpp_physics STATIC ${SCHEMES} ${SCHEMES_RTERRTMGP} ${SCHEMES_OPENMP_OFF} ${SCHEMES_DYNAMICS} ${CAPS} ${SCHEMES_CPP})
 
 set_target_properties(ccpp_physics PROPERTIES VERSION ${PROJECT_VERSION}
@@ -267,6 +331,42 @@ endif()
 if(ENABLE_SATMEDMF_CPP)
   target_include_directories(ccpp_physics PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/physics/PBL/SATMEDMF/cpp_core>
+  )
+endif()
+
+if(ENABLE_SAMF_CPP)
+  target_include_directories(ccpp_physics PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/physics/CONV/SAMF/cpp_core>
+  )
+endif()
+
+if(ENABLE_GWD_CPP)
+  target_include_directories(ccpp_physics PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/physics/GWD/cpp_core>
+  )
+endif()
+
+if(ENABLE_RADIATION_CPP)
+  target_include_directories(ccpp_physics PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/physics/Radiation/RRTMG/cpp_core>
+  )
+endif()
+
+if(ENABLE_SURFACE_CPP)
+  target_include_directories(ccpp_physics PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/physics/SFC_Layer/UFS/cpp_core>
+  )
+endif()
+
+if(ENABLE_PHOTOCHEM_CPP)
+  target_include_directories(ccpp_physics PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/physics/photochem/cpp_core>
+  )
+endif()
+
+if(ENABLE_NOAHMP_CPP)
+  target_include_directories(ccpp_physics PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/physics/SFC_Models/Land/Noahmp/cpp_core>
   )
 endif()
 
@@ -294,6 +394,30 @@ endif()
 
 if(ENABLE_SATMEDMF_CPP)
   add_subdirectory(physics/PBL/SATMEDMF/cpp_core/tests)
+endif()
+
+if(ENABLE_SAMF_CPP)
+  add_subdirectory(physics/CONV/SAMF/cpp_core/tests)
+endif()
+
+if(ENABLE_GWD_CPP)
+  add_subdirectory(physics/GWD/cpp_core/tests)
+endif()
+
+if(ENABLE_RADIATION_CPP)
+  add_subdirectory(physics/Radiation/RRTMG/cpp_core/tests)
+endif()
+
+if(ENABLE_SURFACE_CPP)
+  add_subdirectory(physics/SFC_Layer/UFS/cpp_core/tests)
+endif()
+
+if(ENABLE_PHOTOCHEM_CPP)
+  add_subdirectory(physics/photochem/cpp_core/tests)
+endif()
+
+if(ENABLE_NOAHMP_CPP)
+  add_subdirectory(physics/SFC_Models/Land/Noahmp/cpp_core/tests)
 endif()
 
 # Define where to install the library
